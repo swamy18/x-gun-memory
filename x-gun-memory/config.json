@@ -1,0 +1,72 @@
+{
+  "storage": {
+    "type": "memory",
+    "postgres": {
+      "connectionString": "YOUR_POSTGRES_CONNECTION_STRING"
+    }
+  },
+  "embeddings": {
+    "model": "Xenova/all-MiniLM-L6-v2",
+    "cacheDir": "./data/embeddings-cache",
+    "batchSize": 32,
+    "lruCacheSize": 1000
+  },
+  "mcp": {
+    "port": 3001,
+    "host": "localhost"
+  },
+  "api": {
+    "port": 3000,
+    "host": "localhost"
+  },
+  "retrieval": {
+    "defaultMaxNodes": 5,
+    "defaultTraverseDepth": 2,
+    "highRelevanceThreshold": 0.85,
+    "lowRelevanceThreshold": 0.60,
+    "summaryLength": 400,
+    "useHybrid": true,
+    "fastLimit": 50,
+    "finalLimit": 10,
+    "dualMode": true,
+    "highAccuracyLimit": 100,
+    "graphDepth": 2,
+    "useHybridScoring": false,
+    "hybridWeights": {
+      "semantic": 0.7,
+      "graph": 0.3
+    }
+  },
+  "memory": {
+    "autoExtract": true,
+    "maxTags": 5,
+    "maxEntities": 5
+  },
+  "logging": {
+    "level": "info",
+    "file": "./logs/app.log"
+  },
+  "deduplication": {
+    "enabled": true,
+    "similarityThreshold": 0.75,
+    "mergeThreshold": 0.95,
+    "updateThreshold": 0.75
+  },
+  "agents": {
+    "allowGlobalWrites": ["admin-agent"],
+    "defaultAgentId": "global"
+  },
+  "auth": {
+    "enabled": true,
+    "apiKeys": {
+      "YOUR_API_KEY_1": ["read", "write"],
+      "YOUR_API_KEY_2": ["read"],
+      "YOUR_AGENT_KEY": ["read", "write", "global"]
+    }
+  },
+  "redis": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 6379
+  }
+}
