@@ -224,10 +224,6 @@ class SQLiteAdapter extends BaseAdapter {
     return nodeId;
   }
 
-      return nodeId;
-    });
-  }
-
   async getNode(id) {
     const stmt = this.db.prepare('SELECT * FROM nodes WHERE id = ?');
     const row = stmt.get(id);
@@ -242,19 +238,7 @@ class SQLiteAdapter extends BaseAdapter {
     return row;
   }
 
-  async getNodeByAgent(id, agentId) {
-    const stmt = this.db.prepare('SELECT * FROM nodes WHERE id = ? AND agent_id = ?');
-    const row = stmt.get(id, agentId);
 
-    if (row) {
-      row.data = JSON.parse(row.data);
-      if (row.embeddings) {
-        row.embeddings = JSON.parse(row.embeddings);
-      }
-    }
-
-    return row;
-  }
 
   async getAllNodesWithEmbeddings() {
     const stmt = this.db.prepare(

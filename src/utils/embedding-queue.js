@@ -123,27 +123,6 @@ class EmbeddingQueue {
       this.processing = false;
     });
   }
-
-  async getResult(jobId) {
-    if (!this.redis.isEnabled()) return null;
-
-    try {
-      const result = await this.redis.get(`embedding_result:${jobId}`);
-      return result ? JSON.parse(result) : null;
-    } catch (error) {
-      console.error('Failed to get embedding result:', error);
-      return null;
-    }
-  }
-
-  // Synchronous version for immediate processing
-  async processSync(texts) {
-    return await this.embeddings.generateBatch(texts, true);
-  }
-
-  async stop() {
-    this.processing = false;
-  }
 }
 
 module.exports = EmbeddingQueue;

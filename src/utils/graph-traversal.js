@@ -55,75 +55,7 @@ class GraphTraversal {
     return result;
   }
 
-  // Get connected component
-  async getConnectedComponent(startNodeId, relationshipFilter = null) {
-    const visited = new Set();
-    const stack = [startNodeId];
-    const component = new Set();
 
-    while (stack.length > 0) {
-      const nodeId = stack.pop();
-
-      if (visited.has(nodeId)) {
-        continue;
-      }
-
-      visited.add(nodeId);
-      component.add(nodeId);
-
-      // Get neighbors
-      const outgoing = await this.graphDB.getEdges(nodeId, null, relationshipFilter);
-      const incoming = await this.graphDB.getEdges(null, nodeId, relationshipFilter);
-
-      for (const edge of [...outgoing, ...incoming]) {
-        const neighborId = edge.from_id === nodeId ? edge.to_id : edge.from_id;
-        if (!visited.has(neighborId)) {
-          stack.push(neighborId);
-        }
-      }
-    }
-
-    return Array.from(component);
-  }
-
-  // Find shortest path between two nodes
-  async shortestPath(startNodeId, endNodeId, relationshipFilter = null) {
-    const visited = new Set();
-    const queue = [{ nodeId: startNodeId, path: [startNodeId], depth: 0 }];
-    const paths = {};
-
-    while (queue.length > 0) {
-      const { nodeId, path, depth } = queue.shift();
-
-      if (visited.has(nodeId)) {
-        continue;
-      }
-
-      visited.add(nodeId);
-      paths[nodeId] = path;
-
-      if (nodeId === endNodeId) {
-        return path;
-      }
-
-      // Get neighbors
-      const outgoing = await this.graphDB.getEdges(nodeId, null, relationshipFilter);
-      const incoming = await this.graphDB.getEdges(null, nodeId, relationshipFilter);
-
-      for (const edge of [...outgoing, ...incoming]) {
-        const neighborId = edge.from_id === nodeId ? edge.to_id : edge.from_id;
-        if (!visited.has(neighborId)) {
-          queue.push({
-            nodeId: neighborId,
-            path: [...path, neighborId],
-            depth: depth + 1
-          });
-        }
-      }
-    }
-
-    return null; // No path found
-  }
 
   // Get subgraph within depth
   async getSubgraph(startNodeId, depth = 2, relationshipFilter = null) {

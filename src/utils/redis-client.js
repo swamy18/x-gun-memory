@@ -89,16 +89,7 @@ class RedisClient {
     }
   }
 
-  async brpop(key, timeout = 0) {
-    if (!this.enabled || !this.client) return null;
-    try {
-      const result = await this.client.brpop(key, timeout);
-      return result ? result[1] : null;
-    } catch (error) {
-      console.warn('Redis BRPOP error:', error.message);
-      return null;
-    }
-  }
+
 
   async keys(pattern) {
     if (!this.enabled || !this.client) return [];
@@ -160,11 +151,7 @@ class RedisClient {
     }
   }
 
-  async quit() {
-    if (this.client) {
-      await this.client.quit();
-    }
-  }
+
 
   isEnabled() {
     return this.enabled && this.client;

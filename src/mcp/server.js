@@ -4,7 +4,6 @@ const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js'
 const express = require('express');
 const GraphDB = require('../storage/graph-db');
 const Embeddings = require('../storage/embeddings');
-const GraphTraversal = require('../utils/graph-traversal');
 const Retrieval = require('../utils/retrieval');
 const MemoryExtractor = require('../utils/memory-extractor');
 const config = require('../config-loader');
@@ -13,7 +12,6 @@ class UniversalGraphServer {
   constructor() {
     this.graphDB = new GraphDB(config);
     this.embeddings = new Embeddings(config.embeddings.model, config.embeddings.lruCacheSize, true, config);
-    this.traversal = null;
     this.retrieval = null;
   }
 
@@ -21,8 +19,7 @@ class UniversalGraphServer {
     await this.embeddings.init();
     this.graphDB.embeddings = this.embeddings;
     await this.graphDB.init();
-    this.traversal = new GraphTraversal(this.graphDB);
-    this.retrieval = new Retrieval(this.graphDB, this.embeddings, this.traversal);
+    this.retrieval = new Retrieval(this.graphDB, this.embeddings, null);
   }
 
   async start() {

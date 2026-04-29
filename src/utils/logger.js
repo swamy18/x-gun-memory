@@ -38,40 +38,6 @@ class Logger {
     } catch (error) {
       console.error('Failed to write to log file:', error);
     }
-  }
-
-  log(level, message, ...args) {
-    if (this.levels[level] > this.levels[this.level]) {
-      return;
-    }
-
-    const timestamp = new Date().toISOString();
-    const logMessage = `[${timestamp}] ${level.toUpperCase()}: ${message} ${args.join(' ')}\n`;
-
-    console.log(logMessage.trim());
-
-    try {
-      fs.appendFileSync(this.logFile, logMessage);
-    } catch (error) {
-      console.error('Failed to write to log file:', error);
-    }
-  }
-
-  error(message, ...args) {
-    this.log('error', message, ...args);
-  }
-
-  warn(message, ...args) {
-    this.log('warn', message, ...args);
-  }
-
-  info(message, ...args) {
-    this.log('info', message, ...args);
-  }
-
-  debug(message, ...args) {
-    this.log('debug', message, ...args);
-  }
 }
 
 module.exports = Logger;

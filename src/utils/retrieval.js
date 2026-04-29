@@ -68,11 +68,7 @@ class Retrieval {
 
   async retrieve(query, options = {}) {
     const maxNodes = options.maxNodes || this.config.defaultMaxNodes || 5;
-    const traverseDepth = options.traverseDepth || this.config.defaultTraverseDepth || 2;
     const agentId = options.agentId || 'global';
-    const useHybridScoring = options.useHybridScoring || this.config.useHybridScoring || false;
-    const useHybrid = options.useHybrid || this.config.useHybrid || true;
-    const fastLimit = this.config.fastLimit || 50;
 
     const isHighAccuracy = this.shouldUseHighAccuracy(query, options);
 
@@ -88,116 +84,6 @@ class Retrieval {
     const totalTime = Date.now() - startTime;
 
     console.log(`Retrieval: mode=${isHighAccuracy ? 'highAccuracy' : 'fast'}, time=${totalTime}ms, results=${results.length}`);
-
-    return results;
-
-    let candidates = [];
-    let fastFilterTime = 0;
-    let embeddingTime = 0;
-
-    if (useHybrid) {
-      // STEP 1: Fast keyword/text search
-      const fastStart = Date.now();
-      candidates = await this.graphDB.adapter.fastTextSearch(query, fastLimit, agentId);
-      fastFilterTime = Date.now() - fastStart;
-
-      // Log fast filter results
-      console.log(`Fast filter: ${candidates.length} candidates in ${fastFilterTime}ms`);
-
-      // If no keyword results, fallback to full vector search
-      if (candidates.length === 0) {
-        console.log('No keyword results, falling back to vector search');
-        const embeddingStart = Date.now();
-        const queryEmbedding = await this.embeddings.generate(query);
-        embeddingTime = Date.now() - embeddingStart;
-
-        const semanticResults = await this.graphDB.allQuery(queryEmbedding, maxNodes * 2, agentId);
-        candidates = semanticResults.map(result => ({
-          ...result,
-          data: result.data,
-          embedding: result.embedding
-        }));
-      }
-    } else {
-      // Original vector-only approach
-      const embeddingStart = Date.now();
-      const queryEmbedding = await this.embeddings.generate(query);
-      embeddingTime = Date.now() - embeddingStart;
-
-      const semanticResults = await this.graphDB.allQuery(queryEmbedding, maxNodes * 2, agentId);
-      candidates = semanticResults.map(result => ({
-        ...result,
-        data: result.data,
-        embedding: result.embedding
-      }));
-    }
-
-    return this.fastRetrievalLogic(query, candidates, maxNodes, fastFilterTime, embeddingTime, useHybrid);
-
-    // Convert distance to similarity (cosine distance: 0=similar, 2=dissimilar)
-    let processedResults = semanticResults.map(result => ({
-      ...result,
-      similarity: 1 - result.distance // Convert distance to similarity
-    }));
-
-    // Apply hybrid scoring if enabled
-    if (useHybridScoring) {
-      processedResults = await this.hybridScorer.score(query, processedResults);
-      // Update similarity to hybrid score
-      processedResults = processedResults.map(result => ({
-        ...result,
-        similarity: result.hybridScore || result.similarity
-      }));
-    }
-
-    // For top semantic results, expand via graph traversal
-    const expandedResults = new Map();
-
-    for (const result of processedResults) {
-      // Add the semantic result
-      if (!expandedResults.has(result.id)) {
-        const { content, contentType } = this.processContent(result.data.content, result.similarity, this.config);
-        if (contentType !== 'skipped') {
-          expandedResults.set(result.id, {
-            id: result.id,
-            type: result.type,
-            content: content,
-            contentType: contentType,
-            similarity: result.similarity,
-            source: 'semantic'
-          });
-        }
-      }
-
-      // Traverse graph from this node
-      const subgraph = await this.graphDB.getConnectedNodes(result.id, traverseDepth);
-      for (const traversedNode of subgraph.nodes) {
-        if (!expandedResults.has(traversedNode.id)) {
-          // For traversed nodes, compute similarity
-          let similarity = 0;
-          if (traversedNode.embedding) {
-            similarity = this.embeddings.cosineSimilarity(queryEmbedding, traversedNode.embedding);
-          }
-
-          const { content, contentType } = this.processContent(traversedNode.data.content, similarity, this.config);
-          if (contentType !== 'skipped') {
-            expandedResults.set(traversedNode.id, {
-              id: traversedNode.id,
-              type: traversedNode.type,
-              content: content,
-              contentType: contentType,
-              similarity: similarity,
-              source: 'graph'
-            });
-          }
-        }
-      }
-    }
-
-    // Sort by similarity, filter out skipped, return top results
-    const results = Array.from(expandedResults.values())
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, maxNodes);
 
     return results;
   }
@@ -226,10 +112,10 @@ class Retrieval {
       }));
     }
 
-    return this.fastRetrievalLogic(query, candidates, maxNodes, fastFilterTime, embeddingTime, true);
+    return this.fastRetrievalLogic(query, candidates, maxNodes, fastFilterTime, embeddingTime);
   }
 
-  async fastRetrievalLogic(query, candidates, maxNodes, fastFilterTime, embeddingTime, useHybrid) {
+  async fastRetrievalLogic(query, candidates, maxNodes, fastFilterTime, embeddingTime) {
     // STEP 2: Embedding-based reranking (if we have candidates with embeddings)
     const candidatesWithEmbeddings = candidates.filter(c => c.embedding);
 
@@ -381,31 +267,7 @@ class Retrieval {
     return results;
   }
 
-  // Retrieve by node type
-  async retrieveByType(type, limit = 10) {
-    const { nodes } = await this.graphDB.queryNodes({
-      type: type,
-      limit: limit,
-      orderBy: 'timestamp DESC'
-    });
-    return nodes.slice(0, limit);
-  }
 
-  // Retrieve connected context
-  async retrieveConnected(nodeId, depth = 2) {
-    return await this.graphDB.getConnectedNodes(nodeId, depth);
-  }
-
-  // Retrieve by time range
-  async retrieveByTime(startTime, endTime, type = null) {
-    const filters = {
-      timeRange: { start: startTime, end: endTime }
-    };
-    if (type) filters.type = type;
-
-    const { nodes } = await this.graphDB.queryNodes(filters);
-    return nodes;
-  }
 }
 
 module.exports = Retrieval;
