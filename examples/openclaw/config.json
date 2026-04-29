@@ -59,13 +59,11 @@
   "auth": {
     "enabled": true,
     "apiKeys": {
-      "YOUR_API_KEY_1": ["read", "write"],
-      "YOUR_API_KEY_2": ["read"],
-      "YOUR_AGENT_KEY": ["read", "write", "global"]
+      "openclaw-key": ["read", "write", "global"]
     }
   },
   "redis": {
-    "enabled": true,
+    "enabled": false,
     "host": "127.0.0.1",
     "port": 6379
   }

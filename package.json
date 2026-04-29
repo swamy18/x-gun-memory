@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "description": "Multi-agent memory engine for AI systems with agent isolation, vector search, and MCP support",
   "main": "src/mcp/server.js",
+  "files": ["src", "config.json", ".env.example", "README.md"],
+  "engines": { "node": ">=18" },
   "scripts": {
     "start:mcp": "node src/mcp/server.js",
     "start:mcp:http": "MCP_HTTP=true node src/mcp/server.js",
     "start:api": "node src/api/rest-server.js",
+    "prepublishOnly": "node -e \"console.log('Running prepublish checks...'); require('fs').accessSync('src/mcp/server.js'); require('fs').accessSync('config.json'); console.log('All checks passed.');\"",
     "test": "echo 'Error: no test specified' && exit 1"
   },
   "keywords": [],
@@ -23,6 +26,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^7.0.0",
     "async-mutex": "^0.5.0",
-    "ioredis": "^5.4.1"
+    "ioredis": "^5.4.1",
+    "dotenv": "^16.0.0"
   }
 }

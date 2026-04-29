@@ -1,6 +1,6 @@
 # X-Gun Memory
 
-Multi-agent memory engine for AI systems.
+Your AI agents forget everything. x-gun-memory fixes that.
 Agent-isolated, scalable, vector-powered knowledge sharing.
 Your AI agents finally share a brain - safely.
 
@@ -170,6 +170,8 @@ Full configuration in `config.json`:
 ```
 
 **Switch to Postgres**: Change `storage.type` to `"postgres"`. Zero code changes needed.
+
+**Environment Variables**: Override config values with environment variables. Copy `.env.example` to `.env` and set values. Supported vars: `STORAGE_TYPE`, `POSTGRES_CONNECTION_STRING`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_ENABLED`, `MCP_PORT`, `API_PORT`, `API_HOST`, `LOG_LEVEL`, `DEFAULT_AGENT_ID`, `AUTH_ENABLED`.
 
 ## Usage
 

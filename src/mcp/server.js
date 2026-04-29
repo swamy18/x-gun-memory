@@ -7,7 +7,7 @@ const Embeddings = require('../storage/embeddings');
 const GraphTraversal = require('../utils/graph-traversal');
 const Retrieval = require('../utils/retrieval');
 const MemoryExtractor = require('../utils/memory-extractor');
-const config = require('../../config.json');
+const config = require('../config-loader');
 
 class UniversalGraphServer {
   constructor() {

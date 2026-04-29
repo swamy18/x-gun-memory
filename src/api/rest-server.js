@@ -7,7 +7,7 @@ const Retrieval = require('../utils/retrieval');
 const Auth = require('../utils/auth');
 const Logger = require('../utils/logger');
 const MemoryExtractor = require('../utils/memory-extractor');
-const config = require('../../config.json');
+const config = require('../config-loader');
 
 class RestServer {
   constructor() {
