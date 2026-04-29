@@ -16,8 +16,8 @@ Works seamlessly with any MCP-compatible AI system:
 - **Any custom AI agent** supporting MCP
 
 Supports both:
-- **stdio mode** → single client connections
-- **HTTP/SSE mode** → multiple concurrent clients
+- **stdio mode**: single client connections
+- **HTTP/SSE mode**: multiple concurrent clients
 
 *See setup instructions below for each platform.*
 
@@ -93,7 +93,7 @@ x-gun-memory/
 │       ├── graph-traversal.js       # BFS/DFS traversal
 │       └── logger.js                # Logging
 ├── data/
-│   └── graph.db                     # SQLite database
+│   └── x-gun-memory.db             # SQLite database (default fallback)
 ├── config.json                      # All configuration
 └── package.json
 ```
@@ -123,7 +123,7 @@ Full configuration in `config.json`:
 {
   "storage": {
     "type": "sqlite",
-    "sqlite": { "path": "./data/graph.db" },
+    "sqlite": { "path": "./data/x-gun-memory.db" },
     "postgres": {
       "connectionString": "postgresql://user:pass@localhost:5432/xgunmemory"
     }
@@ -152,14 +152,14 @@ Full configuration in `config.json`:
     "port": 3000,
     "host": "localhost",
     "rateLimit": {
-      "windowMs": 900000,  // 15 minutes
-      "maxRequests": 100    // per agent
+      "windowMs": 900000,
+      "maxRequests": 100
     }
   },
   "logging": { "level": "info", "file": "./logs/app.log" },
   "agents": {
-    "allowGlobalWrites": ["admin-agent"],  // Agents allowed to write to global
-    "defaultAgentId": "global"             // Fallback if not specified
+    "allowGlobalWrites": ["admin-agent"],
+    "defaultAgentId": "global"
   },
   "redis": {
     "enabled": true,
@@ -194,7 +194,7 @@ npm run start:mcp:http
 ```bash
 curl -X POST http://localhost:3000/store \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: default-key" \
+  -H "X-API-Key: YOUR_AGENT_KEY" \
   -d '{
     "agentId": "my-agent",
     "type": "conversation",
@@ -204,13 +204,13 @@ curl -X POST http://localhost:3000/store \
 
 #### Retrieve Context (Fast Mode)
 ```bash
-curl -H "X-API-Key: default-key" \
+curl -H "X-API-Key: YOUR_AGENT_KEY" \
   "http://localhost:3000/retrieve?agentId=my-agent&q=weather&max_nodes=3"
 ```
 
 #### Retrieve Context (High Accuracy Mode)
 ```bash
-curl -H "X-API-Key: default-key" \
+curl -H "X-API-Key: YOUR_AGENT_KEY" \
   "http://localhost:3000/retrieve?agentId=my-agent&q=explain+the+weather+pattern&highAccuracy=true"
 ```
 
@@ -297,7 +297,10 @@ Use `agentId: "global"` for shared knowledge:
 }
 ```
 
-All agents can read global memories, but only configured agents can write to it.
+All agents can read global memories.
+Write controls depend on transport:
+- REST API uses API-key permissions (`global`) via auth middleware.
+- MCP stdio mode has no per-request API-key identity, so enforce global-write policy at process/deployment boundary.
 
 ### Session & Namespace
 Optional grouping for better organization:
@@ -536,7 +539,7 @@ Store memories with automatic feature extraction and lightweight structure:
 ```bash
 # Store structured memory with auto-extraction
 curl -X POST http://localhost:3000/store/memory \
-  -H "X-API-Key: default-key" \
+  -H "X-API-Key: YOUR_AGENT_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "agentId": "my-agent",
@@ -590,6 +593,55 @@ curl -X POST http://localhost:3000/store/memory \
 ```
 
 ## Production Considerations
+
+## Minimal Configurations
+
+### In-memory (fast local testing)
+```json
+{
+  "storage": { "type": "memory" },
+  "auth": { "enabled": false },
+  "redis": { "enabled": false }
+}
+```
+
+### SQLite (single-node persistence)
+```json
+{
+  "storage": {
+    "type": "sqlite",
+    "sqlite": { "path": "./data/x-gun-memory.db" }
+  },
+  "auth": { "enabled": true },
+  "redis": { "enabled": false }
+}
+```
+
+### PostgreSQL (production baseline)
+```json
+{
+  "storage": {
+    "type": "postgres",
+    "postgres": { "connectionString": "postgresql://user:pass@host:5432/db" }
+  },
+  "auth": { "enabled": true },
+  "redis": { "enabled": true, "host": "127.0.0.1", "port": 6379 }
+}
+```
+
+## Troubleshooting
+
+- `Invalid API key` or `Permission 'write' required`: check `auth.enabled`, `X-API-Key`, and key permissions in `config.json`.
+- `Global access not permitted`: your key needs `"global"` permission for REST global writes.
+- `SQLite adapter failed to load`: install `better-sqlite3` and ensure native build support.
+- `PostgreSQL adapter failed to load`: install `pg` and verify connection string.
+- `Redis disabled: ioredis module not available`: install `ioredis` or set `"redis": { "enabled": false }`.
+- Slow first request: embedding model initialization is cold-start heavy on first run.
+- MCP HTTP connector issues: confirm server started with `npm run start:mcp:http` and use `/sse` endpoint.
+
+## Notes on Performance Claims
+
+Latency and throughput numbers in this README are environment-dependent and vary by model, hardware, storage backend, and network conditions. Use your own workload benchmarks for production sizing.
 
 ### Redis Best Practices
 - **Connection Pooling**: Redis handles connection pooling automatically
