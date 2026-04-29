@@ -19,7 +19,7 @@ class UniversalGraphServer {
     await this.embeddings.init();
     this.graphDB.embeddings = this.embeddings;
     await this.graphDB.init();
-    this.retrieval = new Retrieval(this.graphDB, this.embeddings, null);
+    this.retrieval = new Retrieval(this.graphDB, this.embeddings, config);
   }
 
   async start() {
@@ -217,14 +217,9 @@ class UniversalGraphServer {
       throw new Error('agentId is required and must be a string');
     }
 
-    // Auth check for MCP (using global permissions for now)
-    if (config.auth?.enabled) {
-      // For MCP, we assume full permissions for authenticated connections
-      // In production, you'd want per-agent keys
-      if (agentId === 'global' && !['admin-agent'].includes(agentId)) {
-        throw new Error('Global writes not permitted');
-      }
-    }
+    // MCP transports don't currently provide per-request agent identity in this handler,
+    // so we cannot reliably enforce agent-based global-write ACLs here.
+    // HTTP mode still enforces API key auth at middleware level.
 
     if (!type || typeof type !== 'string' || !content || typeof content !== 'string') {
       throw new Error('type and content are required strings');
@@ -376,8 +371,8 @@ class UniversalGraphServer {
         },
       };
 
-      const nodeId = await this.graphDB.createNode(type, nodeData, embedding, agentId, sessionId, namespace);
-      nodeIds.push(nodeId);
+      const result = await this.graphDB.createNode(type, nodeData, embedding, agentId, sessionId, namespace);
+      nodeIds.push(result.id);
     }
 
     return {

@@ -1,11 +1,16 @@
-const Redis = require('ioredis');
+let Redis = null;
+try {
+  Redis = require('ioredis');
+} catch (error) {
+  Redis = null;
+}
 
 class RedisClient {
   constructor(config = {}) {
     this.enabled = config.enabled !== false;
     this.client = null;
 
-    if (this.enabled) {
+    if (this.enabled && Redis) {
       this.client = new Redis({
         host: config.host || process.env.REDIS_HOST || '127.0.0.1',
         port: config.port || process.env.REDIS_PORT || 6379,
@@ -24,6 +29,9 @@ class RedisClient {
       this.client.on('connect', () => {
         console.log('Connected to Redis');
       });
+    } else if (this.enabled && !Redis) {
+      this.enabled = false;
+      console.warn('Redis disabled: ioredis module not available');
     }
   }
 
@@ -62,7 +70,7 @@ class RedisClient {
   }
 
   async deleteByPattern(pattern) {
-    let cursor = 0;
+    let cursor = '0';
     let deletedCount = 0;
     const batchSize = 100;
 

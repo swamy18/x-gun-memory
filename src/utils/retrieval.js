@@ -1,11 +1,10 @@
 const HybridScorer = require('./hybrid-scorer');
 
 class Retrieval {
-  constructor(graphDB, embeddings, traversal, config) {
+  constructor(graphDB, embeddings, config) {
     this.graphDB = graphDB;
     this.embeddings = embeddings;
-    this.traversal = traversal;
-    this.config = config.retrieval || {};
+    this.config = (config && config.retrieval) || {};
     this.hybridScorer = new HybridScorer(graphDB, embeddings);
   }
 
@@ -121,47 +120,65 @@ class Retrieval {
 
     if (candidatesWithEmbeddings.length > 0) {
       const rerankStart = Date.now();
-      const queryEmbedding = await this.embeddings.generate(query);
+      let reranked;
+      if (this.config.useHybridScoring) {
+        const weights = this.config.hybridWeights || { semantic: 0.7, graph: 0.3 };
+        const scored = await this.hybridScorer.score(query, candidatesWithEmbeddings, weights);
+        reranked = scored.map(node => ({
+          node,
+          score: node.hybridScore
+        }));
+      } else {
+        const queryEmbedding = await this.embeddings.generate(query);
+        reranked = candidatesWithEmbeddings.map(node => ({
+          node,
+          score: this.embeddings.cosineSimilarity(queryEmbedding, node.embedding)
+        })).sort((a, b) => b.score - a.score);
+      }
       const rerankTime = Date.now() - rerankStart;
-
-      // Rerank by semantic similarity
-      const reranked = candidatesWithEmbeddings.map(node => ({
-        node,
-        score: this.embeddings.cosineSimilarity(queryEmbedding, node.embedding)
-      })).sort((a, b) => b.score - a.score);
 
       // Log performance
       console.log(`Fast retrieval: fast=${fastFilterTime}ms, embedding=${embeddingTime}ms, rerank=${rerankTime}ms`);
 
-      return reranked.slice(0, maxNodes).map(item => ({
-        id: item.node.id,
-        type: item.node.type,
-        content: item.node.data.summary || item.node.data.content.substring(0, 200) + '...', // Use summary for fast mode
-        contentType: 'summary',
-        similarity: item.score,
-        source: 'fast',
-        metadata: {
-          tags: item.node.data.tags || [],
-          importance: item.node.data.importance || 0.5,
-          memoryType: item.node.data.memory_type || 'general'
-        }
-      }));
+      return reranked.slice(0, maxNodes).map(item => {
+        const processed = this.processContent(item.node.data.content, item.score, this.config);
+        const fallbackBoundary = this.findSentenceBoundary(item.node.data.content || '', 200);
+        const fallbackSummary = (item.node.data.content || '').slice(0, fallbackBoundary) + ((item.node.data.content || '').length > fallbackBoundary ? '...' : '');
+        return {
+          id: item.node.id,
+          type: item.node.type,
+          content: processed.content || item.node.data.summary || fallbackSummary,
+          contentType: processed.contentType === 'skipped' ? 'summary' : processed.contentType,
+          similarity: item.score,
+          source: 'fast',
+          metadata: {
+            tags: item.node.data.tags || [],
+            importance: item.node.data.importance || 0.5,
+            memoryType: item.node.data.memory_type || 'general'
+          }
+        };
+      });
     }
 
     // Fallback: return keyword results without reranking
-    return candidates.slice(0, maxNodes).map(node => ({
-      id: node.id,
-      type: node.type,
-      content: node.data.summary || node.data.content.substring(0, 200) + '...',
-      contentType: 'summary',
-      similarity: 0.5, // Default similarity
-      source: 'keyword',
-      metadata: {
-        tags: node.data.tags || [],
-        importance: node.data.importance || 0.5,
-        memoryType: node.data.memory_type || 'general'
-      }
-    }));
+    return candidates.slice(0, maxNodes).map(node => {
+      const processed = this.processContent(node.data.content, 0.61, this.config);
+      const fallbackBoundary = this.findSentenceBoundary(node.data.content || '', 200);
+      const fallbackSummary = (node.data.content || '').slice(0, fallbackBoundary) + ((node.data.content || '').length > fallbackBoundary ? '...' : '');
+      return {
+        id: node.id,
+        type: node.type,
+        content: processed.content || node.data.summary || fallbackSummary,
+        contentType: processed.contentType === 'skipped' ? 'summary' : processed.contentType,
+        similarity: 0.5, // Default similarity
+        source: 'keyword',
+        metadata: {
+          tags: node.data.tags || [],
+          importance: node.data.importance || 0.5,
+          memoryType: node.data.memory_type || 'general'
+        }
+      };
+    });
   }
 
   async highAccuracyRetrieval(query, agentId, options = {}) {

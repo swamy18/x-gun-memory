@@ -109,7 +109,7 @@ class BaseAdapter {
    * @param {number} limit - Maximum results
    * @returns {Promise<Array<{id: number, type: string, data: object, similarity: number}>>}
    */
-  async findSimilar(embedding, threshold, limit = 5) {
+  async findSimilar(embedding, threshold, limit = 5, agentId = 'global') {
     throw new Error('findSimilar() must be implemented by subclass');
   }
 

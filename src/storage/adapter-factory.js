@@ -14,7 +14,11 @@ class AdapterFactory {
       case 'sqlite':
         try {
           const SQLiteAdapter = require('./adapters/sqlite-adapter');
-          return new SQLiteAdapter(adapterConfigs.sqlite);
+          const sqliteConfig = adapterConfigs.sqlite || { path: './data/x-gun-memory.db' };
+          if (!sqliteConfig.path) {
+            sqliteConfig.path = './data/x-gun-memory.db';
+          }
+          return new SQLiteAdapter(sqliteConfig);
         } catch (error) {
           throw new Error(`SQLite adapter failed to load: ${error.message}. Make sure better-sqlite3 is installed.`);
         }

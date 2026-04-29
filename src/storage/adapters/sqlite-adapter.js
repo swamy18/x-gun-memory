@@ -382,15 +382,15 @@ class SQLiteAdapter extends BaseAdapter {
       const allNodes = await this.getAllNodesWithEmbeddings();
       const results = allNodes.map(node => ({
         ...node,
-        distance: this.cosineSimilarity(queryEmbedding, node.embedding)
+        similarity: this.cosineSimilarity(queryEmbedding, node.embedding)
       }));
 
-      results.sort((a, b) => a.distance - b.distance);
+      results.sort((a, b) => b.similarity - a.similarity);
       return results.slice(0, k);
     }
   }
 
-  async findSimilar(embedding, threshold, limit = 5) {
+  async findSimilar(embedding, threshold, limit = 5, agentId = 'global') {
     if (this.vecAvailable) {
       // Use sqlite-vec with threshold
       const queryBuffer = Buffer.from(new Float32Array(embedding).buffer);
@@ -399,11 +399,12 @@ class SQLiteAdapter extends BaseAdapter {
         FROM vec_nodes vn
         JOIN nodes n ON n.id = vn.id
         WHERE vn.embedding MATCH ?
+        AND n.agent_id = ?
         AND distance <= ?
         ORDER BY distance
         LIMIT ?
       `);
-      const rows = stmt.all(queryBuffer, 1 - threshold, limit); // Convert similarity to distance
+      const rows = stmt.all(queryBuffer, agentId, 1 - threshold, limit); // Convert similarity to distance
 
       return rows.map(row => ({
         id: row.id,
@@ -413,7 +414,7 @@ class SQLiteAdapter extends BaseAdapter {
       }));
     } else {
       // Fallback to JS similarity
-      const allNodes = await this.getAllNodesWithEmbeddings();
+      const allNodes = await this.getAllNodesWithEmbeddingsByAgent(agentId);
       const results = allNodes
         .map(node => ({
           ...node,

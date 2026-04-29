@@ -26,7 +26,7 @@ class RestServer {
     this.graphDB.embeddings = this.embeddings;
     await this.graphDB.init();
     this.traversal = new GraphTraversal(this.graphDB);
-    this.retrieval = new Retrieval(this.graphDB, this.embeddings, this.traversal, this.config);
+    this.retrieval = new Retrieval(this.graphDB, this.embeddings, this.config);
 
     this.app.use(express.json());
 
@@ -332,13 +332,13 @@ class RestServer {
             },
           };
 
-          const nodeId = await this.graphDB.createNode(type, nodeData, embedding, agentId, sessionId, namespace);
+          const result = await this.graphDB.createNode(type, nodeData, embedding, agentId, sessionId, namespace);
 
           for (const relatedId of relationships) {
-            await this.graphDB.createEdge(nodeId, relatedId, 'references');
+            await this.graphDB.createEdge(result.id, relatedId, 'references');
           }
 
-          nodeIds.push(nodeId);
+          nodeIds.push(result.id);
         }
 
         res.json({ success: true, nodeIds });

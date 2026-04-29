@@ -14,6 +14,10 @@ class MemoryAdapter extends BaseAdapter {
     // No-op for memory adapter
   }
 
+  async runMigrations() {
+    // No-op for memory adapter
+  }
+
   async createNode(type, data, embedding, agentId = 'global', sessionId = null, namespace = null) {
     const id = this.nextNodeId++;
     const node = {
@@ -164,15 +168,22 @@ class MemoryAdapter extends BaseAdapter {
       type: node.type,
       data: node.data,
       embedding: node.embedding,
-      distance: this.cosineSimilarity(queryEmbedding, node.embedding)
+      similarity: this.cosineSimilarity(queryEmbedding, node.embedding)
     }));
 
-    results.sort((a, b) => a.distance - b.distance);
+    results.sort((a, b) => b.similarity - a.similarity);
     return results.slice(0, k);
   }
 
-  async findSimilar(embedding, threshold, limit = 5) {
-    const nodesWithEmbeddings = await this.getAllNodesWithEmbeddings();
+  async findSimilar(embedding, threshold, limit = 5, agentId = 'global') {
+    const nodesWithEmbeddings = Array.from(this.nodes.values())
+      .filter(node => node.embeddings && node.agent_id === agentId)
+      .map(node => ({
+        id: node.id,
+        type: node.type,
+        data: node.data,
+        embedding: node.embeddings
+      }));
 
     const results = nodesWithEmbeddings
       .map(node => ({
@@ -189,7 +200,7 @@ class MemoryAdapter extends BaseAdapter {
   }
 
   cosineSimilarity(vecA, vecB) {
-    if (!vecA || !vecB || vecA.length !== vecB.length) return 1;
+    if (!vecA || !vecB || vecA.length !== vecB.length) return 0;
 
     let dotProduct = 0;
     let normA = 0;
@@ -201,9 +212,9 @@ class MemoryAdapter extends BaseAdapter {
       normB += vecB[i] * vecB[i];
     }
 
-    if (normA === 0 || normB === 0) return 1;
+    if (normA === 0 || normB === 0) return 0;
 
-    return 1 - (dotProduct / (Math.sqrt(normA) * Math.sqrt(normB)));
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }
 
   async close() {

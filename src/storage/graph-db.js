@@ -1,15 +1,11 @@
 const AdapterFactory = require('./adapter-factory');
 const Deduplication = require('../utils/deduplication');
-const GraphTraversal = require('../utils/graph-traversal');
-const Retrieval = require('../utils/retrieval');
 const RedisClient = require('../utils/redis-client');
 
 class GraphDB {
   constructor(config) {
     this.adapter = AdapterFactory.createAdapter(config.storage);
     this.embeddings = null;
-    this.retrieval = null;
-    this.traversal = null;
     this.dedup = null;
     this.redis = new RedisClient(config.redis);
     this.config = config;
@@ -18,8 +14,6 @@ class GraphDB {
   async init() {
     await this.adapter.init();
     await this.adapter.runMigrations();
-    this.traversal = new GraphTraversal(this);
-    this.retrieval = new Retrieval(this, this.embeddings, this.traversal, this.config);
     if (this.config.deduplication?.enabled) {
       this.dedup = new Deduplication(this.embeddings, this.adapter, this.config);
     }
@@ -29,7 +23,7 @@ class GraphDB {
   async createNode(type, data, embedding, agentId = 'global', sessionId = null, namespace = null) {
     // Check for duplicates if deduplication is enabled
     if (this.dedup) {
-      const dedupResult = await this.dedup.checkAndHandle(data.content || '', embedding, type);
+      const dedupResult = await this.dedup.checkAndHandle(data.content || '', embedding, type, agentId);
 
       if (dedupResult.action === 'merge') {
         // Merge with existing node
@@ -120,13 +114,13 @@ class GraphDB {
     return await this.adapter.getConnectedNodes(nodeId, depth);
   }
 
-
+  async getEdges(fromId, toId, relationshipFilter) {
+    return await this.adapter.getEdges(fromId, toId, relationshipFilter);
+  }
 
   async allQuery(queryEmbedding, limit = 10, agentId = 'global') {
     return await this.adapter.allQuery(queryEmbedding, limit, agentId);
   }
-
-
 
   async close() {
     await this.adapter.close();
@@ -135,8 +129,6 @@ class GraphDB {
   async healthCheck() {
     return await this.adapter.healthCheck();
   }
-
-  // Higher-level methods that use retrieval
 
 }
 

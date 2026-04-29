@@ -34,6 +34,10 @@ class Auth {
   }
 
   static validateAgentAccess(req, res, next) {
+    if (!config.auth?.enabled) {
+      return next();
+    }
+
     const { agentId } = req.method === 'GET' ? req.query : req.body;
 
     if (agentId === 'global' && !req.auth?.permissions.includes('global')) {

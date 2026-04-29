@@ -2,9 +2,8 @@ const RedisClient = require('./redis-client');
 const crypto = require('crypto');
 
 class EmbeddingQueue {
-  constructor(embeddings, config, batchSize = 32) {
+  constructor(embeddings, config) {
     this.embeddings = embeddings;
-    this.batchSize = batchSize;
     this.redis = new RedisClient(config.redis);
     this.processing = false;
     this.maxRetries = 3;
@@ -14,18 +13,20 @@ class EmbeddingQueue {
     const job = {
       id: Date.now() + Math.random(),
       texts: texts,
+      key: null,
       createdAt: Date.now(),
       retries: 0
     };
 
     const jobKey = crypto.createHash('sha256').update(JSON.stringify(texts)).digest('hex');
+    job.key = jobKey;
 
     try {
       // Check for duplicates
       const exists = await this.redis.sismember('embedding_jobs', jobKey);
       if (exists) {
         // Job already exists, return existing result if available
-        const result = await this.redis.get(`embedding_result:${job.id}`);
+        const result = await this.redis.get(`embedding_result:${jobKey}`);
         if (result) {
           if (callback) callback(null, JSON.parse(result).embeddings);
           return job.id;
@@ -79,11 +80,18 @@ class EmbeddingQueue {
             const embeddings = await this.embeddings.generateBatch(job.texts, true);
 
             // Store result in Redis for retrieval
-            await this.redis.set(`embedding_result:${job.id}`, JSON.stringify({
+            await this.redis.set(`embedding_result:${job.key}`, JSON.stringify({
               status: 'completed',
               embeddings,
               completedAt: Date.now()
             }), 'EX', 3600); // Expire in 1 hour
+
+            // Backward-compat key for callers waiting by job id
+            await this.redis.set(`embedding_result:${job.id}`, JSON.stringify({
+              status: 'completed',
+              embeddings,
+              completedAt: Date.now()
+            }), 'EX', 3600);
 
             // Remove from processing queue (success)
             await this.redis.lrem('embedding_processing', 1, jobData);
@@ -100,7 +108,7 @@ class EmbeddingQueue {
               }, Math.pow(2, job.retries) * 1000);
             } else {
               // Store failure result and clean up
-              await this.redis.set(`embedding_result:${job.id}`, JSON.stringify({
+              await this.redis.set(`embedding_result:${job.key}`, JSON.stringify({
                 status: 'failed',
                 error: error.message,
                 completedAt: Date.now()

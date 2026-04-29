@@ -17,15 +17,16 @@ class Deduplication {
    * @param {string} content - New content to check
    * @param {number[]} embedding - Embedding of the content
    * @param {string} type - Node type
+   * @param {string} agentId - Agent scope for isolation
    * @returns {Promise<{action: string, existingId?: number, similarity?: number}>}
    */
-  async checkAndHandle(content, embedding, type) {
+  async checkAndHandle(content, embedding, type, agentId = 'global') {
     const similarityThreshold = this.config.similarityThreshold || 0.75;
     const mergeThreshold = this.config.mergeThreshold || 0.95;
     const updateThreshold = this.config.updateThreshold || 0.75;
 
     // Find similar nodes
-    const similarNodes = await this.adapter.findSimilar(embedding, similarityThreshold, 5);
+    const similarNodes = await this.adapter.findSimilar(embedding, similarityThreshold, 5, agentId);
 
     // Filter by same type
     const sameTypeNodes = similarNodes.filter(node => node.type === type);

@@ -20,7 +20,7 @@ class PostgresAdapter extends BaseAdapter {
 
     // Create vector extension if not exists
     try {
-      await this.client.query('CREATE EXTENSION IF NOT EXISTS vector');
+      await this.pool.query('CREATE EXTENSION IF NOT EXISTS vector');
     } catch (error) {
       console.warn('pgvector extension not available:', error.message);
     }
@@ -84,7 +84,7 @@ class PostgresAdapter extends BaseAdapter {
 
     for (const query of queries) {
       try {
-        await this.client.query(query);
+        await this.pool.query(query);
       } catch (error) {
         console.warn(`Failed to execute query: ${query}`, error.message);
       }
@@ -137,7 +137,7 @@ class PostgresAdapter extends BaseAdapter {
 
   async getNode(id) {
     const query = 'SELECT * FROM nodes WHERE id = $1';
-    const result = await this.client.query(query, [id]);
+    const result = await this.pool.query(query, [id]);
     const row = result.rows[0];
 
     if (row) {
@@ -152,7 +152,7 @@ class PostgresAdapter extends BaseAdapter {
 
   async getAllNodesWithEmbeddings() {
     const query = 'SELECT id, type, data, embedding FROM nodes WHERE embedding IS NOT NULL';
-    const result = await this.client.query(query);
+    const result = await this.pool.query(query);
 
     return result.rows.map(row => ({
       id: row.id,
@@ -168,7 +168,7 @@ class PostgresAdapter extends BaseAdapter {
       VALUES ($1, $2, $3, $4)
       RETURNING id
     `;
-    const result = await this.client.query(query, [fromId, toId, relationshipType, weight]);
+    const result = await this.pool.query(query, [fromId, toId, relationshipType, weight]);
     return result.rows[0].id;
   }
 
@@ -205,7 +205,7 @@ class PostgresAdapter extends BaseAdapter {
     let edges = [];
     if (filters.relationship) {
       const edgesQuery = 'SELECT * FROM edges WHERE relationship_type = $1';
-      const edgesResult = await this.client.query(edgesQuery, [filters.relationship]);
+      const edgesResult = await this.pool.query(edgesQuery, [filters.relationship]);
       edges = edgesResult.rows;
     }
 
@@ -234,7 +234,7 @@ class PostgresAdapter extends BaseAdapter {
       SELECT DISTINCT * FROM connected
     `;
 
-    const result = await this.client.query(query, [nodeId, depth]);
+    const result = await this.pool.query(query, [nodeId, depth]);
     const nodes = result.rows.map(row => ({
       ...row,
       embedding: row.embedding ? row.embedding.map(v => parseFloat(v)) : null
@@ -248,7 +248,7 @@ class PostgresAdapter extends BaseAdapter {
       SELECT * FROM edges
       WHERE from_id = ANY($1) AND to_id = ANY($1)
     `;
-    const edgesResult = await this.client.query(edgesQuery, [nodeIds]);
+    const edgesResult = await this.pool.query(edgesQuery, [nodeIds]);
     const edges = edgesResult.rows;
 
     return { nodes, edges };
@@ -265,7 +265,7 @@ class PostgresAdapter extends BaseAdapter {
         LIMIT $2
       `;
       const vectorStr = `[${queryEmbedding.join(',')}]`;
-      const result = await this.client.query(query, [vectorStr, k]);
+      const result = await this.pool.query(query, [vectorStr, k]);
 
       return result.rows.map(row => ({
         id: row.id,
@@ -280,27 +280,28 @@ class PostgresAdapter extends BaseAdapter {
       const allNodes = await this.getAllNodesWithEmbeddings();
       const results = allNodes.map(node => ({
         ...node,
-        distance: this.cosineSimilarity(queryEmbedding, node.embedding)
+        similarity: this.cosineSimilarity(queryEmbedding, node.embedding)
       }));
 
-      results.sort((a, b) => a.distance - b.distance);
+      results.sort((a, b) => b.similarity - a.similarity);
       return results.slice(0, k);
     }
   }
 
-  async findSimilar(embedding, threshold, limit = 5) {
+  async findSimilar(embedding, threshold, limit = 5, agentId = 'global') {
     try {
       // Use pgvector with similarity threshold
       const query = `
         SELECT id, type, data, (1 - (embedding <=> $1)) as similarity
         FROM nodes
         WHERE embedding IS NOT NULL
-        AND (1 - (embedding <=> $1)) >= $2
+        AND agent_id = $2
+        AND (1 - (embedding <=> $1)) >= $3
         ORDER BY similarity DESC
-        LIMIT $3
+        LIMIT $4
       `;
       const vectorStr = `[${embedding.join(',')}]`;
-      const result = await this.client.query(query, [vectorStr, threshold, limit]);
+      const result = await this.pool.query(query, [vectorStr, agentId, threshold, limit]);
 
       return result.rows.map(row => ({
         id: row.id,
@@ -311,7 +312,14 @@ class PostgresAdapter extends BaseAdapter {
     } catch (error) {
       console.warn('pgvector findSimilar failed, falling back to JS similarity:', error.message);
       // Fallback to JS similarity
-      const allNodes = await this.getAllNodesWithEmbeddings();
+      const query = 'SELECT id, type, data, embedding FROM nodes WHERE embedding IS NOT NULL AND agent_id = $1';
+      const nodeResult = await this.pool.query(query, [agentId]);
+      const allNodes = nodeResult.rows.map(row => ({
+        id: row.id,
+        type: row.type,
+        data: row.data,
+        embedding: row.embedding ? row.embedding.map(v => parseFloat(v)) : null
+      }));
       const results = allNodes
         .map(node => ({
           ...node,
@@ -379,18 +387,6 @@ class PostgresAdapter extends BaseAdapter {
     }
   }
 
-  async healthCheck() {
-    const start = Date.now();
-    try {
-      await this.pool.query('SELECT COUNT(*) FROM nodes');
-      const latency = Date.now() - start;
-      return { status: 'ok', latency };
-    } catch (error) {
-      return { status: 'error', latency: Date.now() - start, error: error.message };
-    }
-  }
-  }
-
   async updateNode(id, updates) {
     const setParts = [];
     const params = [];
@@ -413,7 +409,7 @@ class PostgresAdapter extends BaseAdapter {
     const sql = `UPDATE nodes SET ${setParts.join(', ')} WHERE id = $${paramIndex++}`;
     params.push(id);
 
-    await this.client.query(sql, params);
+    await this.pool.query(sql, params);
   }
 
   async allQuery(queryEmbedding, limit = 10, agentId = 'global') {
@@ -455,14 +451,14 @@ class PostgresAdapter extends BaseAdapter {
       params.push(relationshipFilter);
     }
 
-    const result = await this.client.query(sql, params);
+    const result = await this.pool.query(sql, params);
     return result.rows;
   }
 
   async healthCheck() {
     const start = Date.now();
     try {
-      await this.client.query('SELECT COUNT(*) FROM nodes');
+      await this.pool.query('SELECT COUNT(*) FROM nodes');
       const latency = Date.now() - start;
       return { status: 'ok', latency };
     } catch (error) {

@@ -24,14 +24,33 @@ class Embeddings {
     this.cacheMisses = 0;
     this.useQueue = useQueue;
     this.queue = useQueue ? new EmbeddingQueue(this, config) : null;
+    this.mockMode = process.env.MOCK_EMBEDDINGS === 'true';
   }
 
   async init() {
+    if (this.mockMode) {
+      return;
+    }
+
     if (!this.extractor) {
       console.log('Loading embedding model...');
       this.extractor = await pipeline('feature-extraction', this.modelName);
       console.log('Embedding model loaded.');
     }
+  }
+
+  mockEmbedding(text) {
+    const input = (text || '').toLowerCase();
+    let a = 0;
+    let b = 0;
+    let c = 0;
+    for (let i = 0; i < input.length; i++) {
+      const code = input.charCodeAt(i);
+      a += code;
+      b += code % 7;
+      c += code % 13;
+    }
+    return [a / 1000, b / 100, c / 100];
   }
 
   /**
@@ -48,7 +67,11 @@ class Embeddings {
    * @param {string} text - Input text
    * @returns {Promise<number[]>} Embedding vector
    */
-  async generate(text) {
+  async generate(text, retryCount = 0) {
+    if (this.mockMode) {
+      return this.mockEmbedding(text);
+    }
+
     if (!this.extractor) {
       await this.init();
     }
@@ -87,8 +110,14 @@ class Embeddings {
         const lockAcquired = await this.redis.setnx(lockKey, '1');
         if (!lockAcquired) {
           // Another process is computing, wait and retry
-          await new Promise(resolve => setTimeout(resolve, 100));
-          return await this.generate(text); // Recursive retry
+          const maxRetries = 50;
+          if (retryCount >= maxRetries) {
+            throw new Error(`Embedding lock timeout after ${maxRetries} retries`);
+          }
+
+          const delayMs = Math.min(100 * Math.pow(1.2, retryCount), 2000);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          return await this.generate(text, retryCount + 1);
         }
       } catch (error) {
         console.warn('Redis lock error:', error.message);
@@ -129,6 +158,10 @@ class Embeddings {
    * @returns {Promise<number[][]>} Array of embedding vectors
    */
   async generateBatch(texts, sync = false) {
+    if (this.mockMode) {
+      return texts.map(text => this.mockEmbedding(text));
+    }
+
     if (!this.extractor) {
       await this.init();
     }
@@ -140,7 +173,7 @@ class Embeddings {
     // Check cache for each text
     for (let i = 0; i < texts.length; i++) {
       const hash = this.hashText(texts[i]);
-      const cached = this.cache.get(hash);
+      const cached = this.lruCache.get(hash);
 
       if (cached) {
         this.cacheHits++;
@@ -170,7 +203,7 @@ class Embeddings {
               const hash = this.hashText(uncachedTexts[i]);
 
               results[originalIndex] = embedding;
-              this.cache.set(hash, embedding);
+              this.lruCache.set(hash, embedding);
             }
 
             resolve(results);
@@ -187,7 +220,7 @@ class Embeddings {
           const hash = this.hashText(uncachedTexts[i]);
 
           results[originalIndex] = embedding;
-          this.cache.set(hash, embedding);
+          this.lruCache.set(hash, embedding);
         }
       }
     }
