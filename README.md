@@ -101,25 +101,37 @@ x-gun-memory/
 ## Installation
 
 ```bash
-git clone <repo>
+git clone https://github.com/swamy18/x-gun-memory
 cd x-gun-memory
 npm install
 ```
 
+Note: `npm install` may report security vulnerabilities. Run `npm audit fix` to attempt automatic fixes, or `npm audit` for details.
+
 ### Node Compatibility Note
 
-- `better-sqlite3` may fail to install/load on very new Node releases before prebuilt binaries are available (for example, Node 24 in some Windows environments).
-- If SQLite startup fails with missing native bindings, use Node 18/20 LTS, or install the required native build toolchain (Visual Studio C++ workload on Windows) and rebuild.
+- `better-sqlite3` may fail to install/load on Windows with Node 24 due to missing prebuilt binaries or build toolchain requirements.
+- If SQLite startup fails with missing native bindings, use Node 18/20 LTS, install Visual Studio C++ workload on Windows, or switch to PostgreSQL mode.
 - PostgreSQL mode avoids the `better-sqlite3` native dependency path.
 
 ## Quick Start
 
 ```bash
-git clone <repo>
+git clone https://github.com/swamy18/x-gun-memory
 cd x-gun-memory
 npm install
 npm run start:mcp
 ```
+
+## Running Tests
+
+To run the test suite:
+
+```bash
+npm test
+```
+
+Note: Currently, no tests are implemented. This is a placeholder command.
 
 ## Configuration
 
@@ -177,7 +189,23 @@ Full configuration in `config.json`:
 
 **Switch to Postgres**: Change `storage.type` to `"postgres"`. Zero code changes needed.
 
-**Environment Variables**: Override config values with environment variables. Copy `.env.example` to `.env` and set values. Supported vars: `STORAGE_TYPE`, `POSTGRES_CONNECTION_STRING`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_ENABLED`, `MCP_PORT`, `API_PORT`, `API_HOST`, `LOG_LEVEL`, `DEFAULT_AGENT_ID`, `AUTH_ENABLED`.
+**Environment Variables**: Override config values with environment variables.
+
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` with your desired values.
+
+Supported variables:
+- `STORAGE_TYPE`: Storage backend (`sqlite`, `postgres`, `memory`)
+- `POSTGRES_CONNECTION_STRING`: PostgreSQL connection string
+- `REDIS_HOST`, `REDIS_PORT`, `REDIS_ENABLED`: Redis configuration
+- `MCP_PORT`, `API_PORT`, `API_HOST`: Server configuration
+- `LOG_LEVEL`: Logging level (`info`, `debug`, etc.)
+- `DEFAULT_AGENT_ID`: Default agent identifier
+- `AUTH_ENABLED`: Enable/disable authentication
 
 ## Usage
 
@@ -405,7 +433,7 @@ All endpoints require `agentId` in request body/query parameters.
     "batchSize": 128
   },
   "uptime": 3600,
-  "version": "2.0.0"
+  "version": "1.0.0"
 }
 ```
 
