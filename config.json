@@ -8,7 +8,7 @@
   "embeddings": {
     "model": "Xenova/all-MiniLM-L6-v2",
     "cacheDir": "./data/embeddings-cache",
-    "batchSize": 32,
+    "batchSize": 128,
     "lruCacheSize": 1000
   },
   "mcp": {

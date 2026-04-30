@@ -24,6 +24,14 @@ class PostgresAdapter extends BaseAdapter {
     } catch (error) {
       console.warn('pgvector extension not available:', error.message);
     }
+
+    // Refresh planner stats so ivfflat + tsvector indexes are considered quickly
+    try {
+      await this.pool.query('ANALYZE nodes');
+      await this.pool.query('ANALYZE edges');
+    } catch (error) {
+      console.warn('ANALYZE failed:', error.message);
+    }
   }
 
   async createTables() {
@@ -216,13 +224,13 @@ class PostgresAdapter extends BaseAdapter {
     // Recursive CTE for graph traversal
     const query = `
       WITH RECURSIVE connected AS (
-        SELECT id, type, data, embedding, 0 as depth
+        SELECT id, type, data, embedding, agent_id, session_id, namespace, 0 as depth
         FROM nodes
         WHERE id = $1
 
         UNION ALL
 
-        SELECT n.id, n.type, n.data, n.embedding, c.depth + 1
+        SELECT n.id, n.type, n.data, n.embedding, n.agent_id, n.session_id, n.namespace, c.depth + 1
         FROM nodes n
         JOIN edges e ON (e.from_id = n.id OR e.to_id = n.id)
         JOIN connected c ON (

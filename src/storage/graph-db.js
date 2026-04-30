@@ -34,15 +34,6 @@ class GraphDB {
         const newId = await this.adapter.createNode(type, data, embedding, agentId, sessionId, namespace);
         await this.dedup.updateNodeRelation(dedupResult.existingId, newId, dedupResult.similarity, this.adapter);
 
-        // Invalidate query cache for this agent
-        if (this.redis.isEnabled()) {
-          try {
-            await this.redis.del(`query:${agentId}:*`);
-          } catch (error) {
-            console.warn('Cache invalidation error:', error.message);
-          }
-        }
-
         return { id: newId, action: 'update', relatedId: dedupResult.existingId, similarity: dedupResult.similarity };
       }
     }
@@ -50,29 +41,11 @@ class GraphDB {
     // Create new node (dedup disabled or action = 'create')
     const id = await this.adapter.createNode(type, data, embedding, agentId, sessionId, namespace);
 
-    // Invalidate query cache for this agent
-    if (this.redis.isEnabled()) {
-      try {
-        await this.redis.del(`query:${agentId}:*`);
-      } catch (error) {
-        console.warn('Cache invalidation error:', error.message);
-      }
-    }
-
     return { id, action: 'create' };
   }
 
   async createStructuredMemory(content, embedding, agentId = 'global', sessionId = null, namespace = null, features = {}) {
     const result = await this.adapter.createStructuredNode(content, embedding, agentId, sessionId, namespace, features);
-
-    // Invalidate query cache for this agent
-    if (this.redis.isEnabled()) {
-      try {
-        await this.redis.del(`query:${agentId}:*`);
-      } catch (error) {
-        console.warn('Cache invalidation error:', error.message);
-      }
-    }
 
     return { id: result, action: 'create' };
   }
@@ -86,24 +59,7 @@ class GraphDB {
   }
 
   async createEdge(fromId, toId, relationshipType, weight = 1.0) {
-    const result = await this.adapter.createEdge(fromId, toId, relationshipType, weight);
-
-    // Conservative cache invalidation - edges affect graph traversal
-    // but most queries are semantic, not graph-based
-    if (this.redis.isEnabled()) {
-      try {
-        // Only clear caches that might be affected by graph changes
-        // TTL will handle most cache expiration
-        const affectedKeys = await this.redis.keys('query:*:*:*traverse*');
-        if (affectedKeys.length > 0) {
-          await this.redis.del(...affectedKeys.slice(0, 10)); // Limit to avoid blocking
-        }
-      } catch (error) {
-        console.warn('Cache invalidation error:', error.message);
-      }
-    }
-
-    return result;
+    return await this.adapter.createEdge(fromId, toId, relationshipType, weight);
   }
 
   async queryNodes(filters, agentId = 'global') {

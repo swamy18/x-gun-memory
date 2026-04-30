@@ -27,6 +27,7 @@ class Embeddings {
     this.cachedLatencyCount = 0;
     this.uncachedLatencyCount = 0;
     this.batchSize = config.embeddings?.batchSize || 32;
+    this.cacheDir = config.embeddings?.cacheDir || null;
     this.useQueue = useQueue;
     this.queue = useQueue ? new EmbeddingQueue(this, config) : null;
     this.mockMode = process.env.MOCK_EMBEDDINGS === 'true';
@@ -35,6 +36,10 @@ class Embeddings {
   async init() {
     if (this.mockMode) {
       return;
+    }
+
+    if (this.cacheDir && !process.env.TRANSFORMERS_CACHE) {
+      process.env.TRANSFORMERS_CACHE = this.cacheDir;
     }
 
     if (!this.extractor) {

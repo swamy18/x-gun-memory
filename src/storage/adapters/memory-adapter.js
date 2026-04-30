@@ -97,15 +97,6 @@ class MemoryAdapter extends BaseAdapter {
     }
 
     if (filters.timeRange) {
-      if (filters.timeRange.start) {
-        nodes = nodes.filter(node => node.timestamp >= filters.timeRange.start);
-      }
-      if (filters.timeRange.end) {
-        nodes = nodes.filter(node => node.timestamp <= filters.timeRange.end);
-      }
-    }
-
-    if (filters.timeRange) {
       nodes = nodes.filter(node => {
         const nodeTime = new Date(node.timestamp);
         const start = filters.timeRange.start ? new Date(filters.timeRange.start) : null;
@@ -133,7 +124,7 @@ class MemoryAdapter extends BaseAdapter {
     const resultEdges = [];
 
     while (queue.length > 0) {
-      const { id, currentDepth } = queue.shift();
+      const { id, depth: currentDepth } = queue.shift();
 
       if (visited.has(id) || currentDepth > depth) continue;
       visited.add(id);
@@ -239,11 +230,16 @@ class MemoryAdapter extends BaseAdapter {
     }
   }
 
-  async allQuery(queryEmbedding, limit = 10, agentId = 'global') {
+  async allQuery(queryEmbedding, limit = 10, agentId = 'global', scope = {}) {
     console.warn("Memory adapter is not for production - using slow JS similarity search");
 
     return Array.from(this.nodes.values())
-      .filter(node => node.embeddings && node.agent_id === agentId) // Filter by agent
+      .filter(node => {
+        if (!node.embeddings || node.agent_id !== agentId) return false;
+        if (scope.sessionId && node.session_id !== scope.sessionId) return false;
+        if (scope.namespace && node.namespace !== scope.namespace) return false;
+        return true;
+      })
       .map(node => ({
         id: node.id,
         type: node.type,
@@ -254,14 +250,18 @@ class MemoryAdapter extends BaseAdapter {
       .slice(0, limit);
   }
 
-  async fastTextSearch(query, limit = 50, agentId = 'global') {
+  async fastTextSearch(query, limit = 50, agentId = 'global', scope = {}) {
     // Simple substring search for memory adapter
     const queryLower = query.toLowerCase();
 
     return Array.from(this.nodes.values())
-      .filter(node => node.agent_id === agentId &&
-                     node.data.content &&
-                     node.data.content.toLowerCase().includes(queryLower))
+      .filter(node => {
+        if (node.agent_id !== agentId) return false;
+        if (scope.sessionId && node.session_id !== scope.sessionId) return false;
+        if (scope.namespace && node.namespace !== scope.namespace) return false;
+        if (!node.data.content) return false;
+        return node.data.content.toLowerCase().includes(queryLower);
+      })
       .slice(0, limit)
       .map(node => ({
         id: node.id,

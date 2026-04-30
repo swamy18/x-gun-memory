@@ -274,7 +274,7 @@ class UniversalGraphServer {
   }
 
   async handleRetrieveContext(args) {
-    const { agentId, sessionId, namespace, query, max_nodes = 5, traverse_depth = 2, highAccuracy = false } = args;
+    const { agentId, sessionId, namespace, query, max_nodes = 5, traverse_depth = (config.retrieval?.defaultTraverseDepth ?? 2), highAccuracy = false } = args;
 
     if (!agentId || typeof agentId !== 'string') {
       throw new Error('agentId is required and must be a string');

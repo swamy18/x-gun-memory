@@ -41,7 +41,7 @@ Supports both:
 - **Pluggable Storage** - SQLite (local), PostgreSQL (cloud), or in-memory. Swap with one config change.
 - **Smart Deduplication** - Automatically merges near-duplicate memories (>=0.95), links related ones (0.75-0.95), creates fresh for new content. Maintains version history of original content before each merge.
 - **Relevance-based Retrieval** - Full content for high similarity (>=0.85), smart sentence-boundary summary for medium (0.60-0.85), noise filtered below 0.60
-- **Fast Embeddings** - LRU cache + batch processing (configurable `embeddings.batchSize`, default `32`) with runtime cached/uncached latency stats
+- **Fast Embeddings** - LRU cache + batch processing (configurable `embeddings.batchSize`, default `128`) with runtime cached/uncached latency stats
 - **Native Vector Search** - O(log N) via sqlite-vec / pgvector. Not brute force.
 - **Universal MCP** - Works as stdio (Cursor, Claude Code, Claude Desktop, Hermes) AND HTTP/SSE (Claude.ai, OpenClaw)
 - **Batch Operations** - Store multiple memories in one call
@@ -106,6 +106,12 @@ cd x-gun-memory
 npm install
 ```
 
+### Node Compatibility Note
+
+- `better-sqlite3` may fail to install/load on very new Node releases before prebuilt binaries are available (for example, Node 24 in some Windows environments).
+- If SQLite startup fails with missing native bindings, use Node 18/20 LTS, or install the required native build toolchain (Visual Studio C++ workload on Windows) and rebuild.
+- PostgreSQL mode avoids the `better-sqlite3` native dependency path.
+
 ## Quick Start
 
 ```bash
@@ -131,7 +137,7 @@ Full configuration in `config.json`:
   "embeddings": {
     "model": "Xenova/all-MiniLM-L6-v2",
     "cacheDir": "./data/embeddings-cache",
-    "batchSize": 32,
+    "batchSize": 128,
     "lruCacheSize": 1000
   },
   "retrieval": {
@@ -396,7 +402,7 @@ All endpoints require `agentId` in request body/query parameters.
     "avgLatencyMs": 45,
     "avgCachedLatencyMs": 8,
     "avgUncachedLatencyMs": 220,
-    "batchSize": 32
+    "batchSize": 128
   },
   "uptime": 3600,
   "version": "2.0.0"
@@ -411,7 +417,8 @@ No changes needed. Works out of the box.
 
 ### Production (PostgreSQL)
 1. Install pgvector: `CREATE EXTENSION vector;`
-2. Update config.json:
+2. Ensure planner stats are current so vector/text indexes are used efficiently: `ANALYZE nodes; ANALYZE edges;`
+3. Update config.json:
    ```json
    {
      "storage": {
@@ -512,9 +519,15 @@ Two-stage retrieval for optimal performance:
 }
 ```
 
+`dualMode: false` forces fast mode unless the request explicitly sets `highAccuracy: true`.
+
 **Performance Comparison:**
 - **Fast Mode**: 50-100ms, summary content
 - **High Accuracy Mode**: 200-500ms, full content + context
+
+Embedding throughput note (local benchmark example):
+- On this project setup, `embeddings.batchSize=128` outperformed `64` for a 256-item uncached run (`3389ms` vs `3851ms` total).
+- Prefer `POST /store/batch` over repeated `POST /store` for higher write throughput.
 
 ### Hybrid Scoring
 Combines semantic similarity with graph relationships:

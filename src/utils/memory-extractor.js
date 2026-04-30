@@ -7,8 +7,10 @@ class MemoryExtractor {
    * @returns {object} Extracted features
    */
   static extractMemoryFeatures(text) {
+    const detectedType = this.detectType(text);
     return {
-      type: this.detectType(text),
+      type: detectedType,
+      memory_type: detectedType,
       tags: this.extractTags(text),
       entities: this.extractEntities(text),
       summary: this.generateSummary(text),

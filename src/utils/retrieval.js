@@ -47,10 +47,23 @@ class Retrieval {
     }
   }
 
+  isNodeInScope(node, agentId, scope = {}) {
+    if (!node) return false;
+    if (node.agent_id && node.agent_id !== agentId) return false;
+    if (scope.sessionId && node.session_id !== scope.sessionId) return false;
+    if (scope.namespace && node.namespace !== scope.namespace) return false;
+    return true;
+  }
+
   shouldUseHighAccuracy(query, options) {
     // Explicit flag takes precedence
     if (options.highAccuracy !== undefined) {
       return options.highAccuracy;
+    }
+
+    // If dual mode is disabled, stay in fast mode unless explicitly overridden
+    if (this.config.dualMode === false) {
+      return false;
     }
 
     if (!query) return false;
@@ -125,7 +138,7 @@ class Retrieval {
     if (candidatesWithEmbeddings.length > 0) {
       const rerankStart = Date.now();
       let reranked;
-      if (this.config.useHybridScoring) {
+      if (this.config.useHybridScoring || this.config.useHybrid) {
         const weights = this.config.hybridWeights || { semantic: 0.7, graph: 0.3 };
         const scored = await this.hybridScorer.score(query, candidatesWithEmbeddings, weights);
         reranked = scored.map(node => ({
@@ -188,7 +201,7 @@ class Retrieval {
   async highAccuracyRetrieval(query, agentId, options = {}, scope = {}) {
     const maxNodes = options.maxNodes || this.config.finalLimit || 10;
     const highAccuracyLimit = this.config.highAccuracyLimit || 100;
-    const graphDepth = this.config.graphDepth || 2;
+    const graphDepth = options.traverseDepth || this.config.graphDepth || 2;
 
     // STEP 1: Expanded keyword search
     const fastStart = Date.now();
@@ -222,10 +235,13 @@ class Retrieval {
       for (const candidate of topCandidates) {
         // Get connected nodes for context
         const connected = await this.graphDB.getConnectedNodes(candidate.node.id, graphDepth);
+        const scopedConnectedNodes = (connected.nodes || []).filter(node =>
+          this.isNodeInScope(node, agentId, scope)
+        );
 
         expandedResults.push({
           ...candidate,
-          connectedNodes: connected.nodes.slice(0, 3), // Limit connected nodes
+          connectedNodes: scopedConnectedNodes.slice(0, 3), // Limit connected nodes
           edges: connected.edges.slice(0, 5)
         });
       }
@@ -254,7 +270,7 @@ class Retrieval {
           connectedNodes: item.connectedNodes.map(n => ({
             id: n.id,
             type: n.type,
-            content: n.data.summary || n.data.content.substring(0, 100) + '...',
+            content: n.data.summary || ((n.data.content || '').substring(0, 100) + (((n.data.content || '').length > 100) ? '...' : '')),
             relationship: 'connected'
           })),
           edgeCount: item.edges.length
