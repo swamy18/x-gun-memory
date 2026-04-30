@@ -181,7 +181,7 @@ class RestServer {
     // Retrieve context
     this.app.get('/retrieve', Auth.validateAgentAccess, async (req, res) => {
       try {
-        const { agentId = 'global', q: query, max_nodes = 5, traverse_depth = 2, highAccuracy } = req.query;
+        const { agentId = 'global', sessionId, namespace, q: query, max_nodes = 5, traverse_depth = 2, highAccuracy } = req.query;
 
         if (!query || typeof query !== 'string') {
           return res.status(400).json({ error: 'query parameter is required and must be a string' });
@@ -203,6 +203,8 @@ class RestServer {
           maxNodes: maxNodes,
           traverseDepth: traverseDepth,
           agentId: agentId,
+          sessionId,
+          namespace,
           highAccuracy: highAccuracy === 'true' || highAccuracy === true
         });
 

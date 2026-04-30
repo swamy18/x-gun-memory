@@ -118,8 +118,8 @@ class GraphDB {
     return await this.adapter.getEdges(fromId, toId, relationshipFilter);
   }
 
-  async allQuery(queryEmbedding, limit = 10, agentId = 'global') {
-    return await this.adapter.allQuery(queryEmbedding, limit, agentId);
+  async allQuery(queryEmbedding, limit = 10, agentId = 'global', scope = {}) {
+    return await this.adapter.allQuery(queryEmbedding, limit, agentId, scope);
   }
 
   async close() {

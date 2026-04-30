@@ -149,6 +149,16 @@ class RedisClient {
     }
   }
 
+  async srem(key, ...members) {
+    if (!this.enabled || !this.client) return 0;
+    try {
+      return await this.client.srem(key, ...members);
+    } catch (error) {
+      console.warn('Redis SREM error:', error.message);
+      return 0;
+    }
+  }
+
   async setnx(key, value) {
     if (!this.enabled || !this.client) return 0;
     try {

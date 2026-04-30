@@ -23,9 +23,9 @@ Supports both:
 
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green)](#compatible-ai-tools)
 [![Works with Claude](https://img.shields.io/badge/Claude-Supported-blue)](#compatible-ai-tools)
-[![Multi-Agent](https://img.shields.io/badge/multi--agent-✅-green)](#multi-agent-usage)
-[![Agent Isolation](https://img.shields.io/badge/agent--isolation-✅-blue)](#agent-isolation)
-[![Thread Safe](https://img.shields.io/badge/thread--safe-✅-orange)](#concurrency)
+[![Multi-Agent](https://img.shields.io/badge/multi--agent-yes-green)](#multi-agent-usage)
+[![Agent Isolation](https://img.shields.io/badge/agent--isolation-yes-blue)](#agent-isolation)
+[![Thread Safe](https://img.shields.io/badge/thread--safe-yes-orange)](#concurrency)
 
 [![npm version](https://img.shields.io/npm/v/x-gun-memory)](https://www.npmjs.com/package/x-gun-memory)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -34,24 +34,24 @@ Supports both:
 
 ## Features
 
-- **Agent Isolation** — Complete memory separation per AI agent. No data leakage between agents.
-- **Semi-Structured Memory** — Automatic feature extraction (type, tags, entities, summary, importance)
-- **Multi-Agent Support** — Concurrent agents via HTTP-SSE with thread-safe operations
-- **Global Knowledge Sharing** — Optional shared memory space (`agentId="global"`) for cross-agent knowledge
-- **Pluggable Storage** — SQLite (local), PostgreSQL (cloud), or in-memory. Swap with one config change.
-- **Smart Deduplication** — Automatically merges near-duplicate memories (≥0.95), links related ones (0.75-0.95), creates fresh for new content. Maintains version history of original content before each merge.
-- **Relevance-based Retrieval** — Full content for high similarity (≥0.85), smart sentence-boundary summary for medium (0.60-0.85), noise filtered below 0.60
-- **Fast Embeddings** — LRU cache + batch processing. ~50ms cached vs 500ms cold
-- **Native Vector Search** — O(log N) via sqlite-vec / pgvector. Not brute force.
-- **Universal MCP** — Works as stdio (Cursor, Claude Code, Claude Desktop, Hermes) AND HTTP/SSE (Claude.ai, OpenClaw)
-- **Batch Operations** — Store multiple memories in one call
-- **Token Efficient** — Returns only what's needed, not full node dumps
-- **Background Processing** — Asynchronous embedding generation queue
-- **Hybrid Scoring** — Combines semantic similarity with graph relationships
-- **Database Migrations** — Automatic schema versioning and upgrades
-- **Structured Logging** — JSON logging with agent tracking and performance metrics
-- **Rate Limiting** — Built-in protection against abuse (100 requests/15min per agent)
-- **Conflict Safety** — Optimistic locking prevents concurrent write conflicts
+- **Agent Isolation** - Complete memory separation per AI agent. No data leakage between agents.
+- **Semi-Structured Memory** - Automatic feature extraction (type, tags, entities, summary, importance)
+- **Multi-Agent Support** - Concurrent agents via HTTP-SSE with thread-safe operations
+- **Global Knowledge Sharing** - Optional shared memory space (`agentId="global"`) for cross-agent knowledge
+- **Pluggable Storage** - SQLite (local), PostgreSQL (cloud), or in-memory. Swap with one config change.
+- **Smart Deduplication** - Automatically merges near-duplicate memories (>=0.95), links related ones (0.75-0.95), creates fresh for new content. Maintains version history of original content before each merge.
+- **Relevance-based Retrieval** - Full content for high similarity (>=0.85), smart sentence-boundary summary for medium (0.60-0.85), noise filtered below 0.60
+- **Fast Embeddings** - LRU cache + batch processing (configurable `embeddings.batchSize`, default `32`) with runtime cached/uncached latency stats
+- **Native Vector Search** - O(log N) via sqlite-vec / pgvector. Not brute force.
+- **Universal MCP** - Works as stdio (Cursor, Claude Code, Claude Desktop, Hermes) AND HTTP/SSE (Claude.ai, OpenClaw)
+- **Batch Operations** - Store multiple memories in one call
+- **Token Efficient** - Returns only what's needed, not full node dumps
+- **Background Processing** - Asynchronous embedding generation queue
+- **Hybrid Scoring** - Combines semantic similarity with graph relationships
+- **Database Migrations** - Automatic schema versioning and upgrades
+- **Structured Logging** - JSON logging with agent tracking and performance metrics
+- **Rate Limiting** - Built-in protection against abuse (100 requests/15min per agent)
+- **Conflict Safety** - Optimistic locking prevents concurrent write conflicts
 
 ## Architecture
 
@@ -70,32 +70,32 @@ Supports both:
 
 ### Project Structure
 
-```
+```text
 x-gun-memory/
-├── src/
-│   ├── storage/
-│   │   ├── adapters/
-│   │   │   ├── base-adapter.js      # Abstract adapter interface
-│   │   │   ├── sqlite-adapter.js    # SQLite + sqlite-vec
-│   │   │   ├── postgres-adapter.js  # PostgreSQL + pgvector
-│   │   │   ├── memory-adapter.js    # In-memory (testing)
-│   │   │   └── README.md            # Build your own adapter
-│   │   ├── adapter-factory.js       # Auto-select from config
-│   │   ├── graph-db.js              # Orchestration layer
-│   │   └── embeddings.js            # Local embeddings + LRU cache
-│   ├── mcp/
-│   │   └── server.js                # MCP stdio + HTTP/SSE
-│   ├── api/
-│   │   └── rest-server.js           # REST API
-│   └── utils/
-│       ├── retrieval.js             # Smart relevance retrieval
-│       ├── deduplication.js         # Merge/update/create logic
-│       ├── graph-traversal.js       # BFS/DFS traversal
-│       └── logger.js                # Logging
-├── data/
-│   └── x-gun-memory.db             # SQLite database (default fallback)
-├── config.json                      # All configuration
-└── package.json
+|-- src/
+|   |-- storage/
+|   |   |-- adapters/
+|   |   |   |-- base-adapter.js      # Abstract adapter interface
+|   |   |   |-- sqlite-adapter.js    # SQLite + sqlite-vec
+|   |   |   |-- postgres-adapter.js  # PostgreSQL + pgvector
+|   |   |   |-- memory-adapter.js    # In-memory (testing)
+|   |   |   `-- README.md            # Build your own adapter
+|   |   |-- adapter-factory.js       # Auto-select from config
+|   |   |-- graph-db.js              # Orchestration layer
+|   |   `-- embeddings.js            # Local embeddings + LRU cache
+|   |-- mcp/
+|   |   `-- server.js                # MCP stdio + HTTP/SSE
+|   |-- api/
+|   |   `-- rest-server.js           # REST API
+|   `-- utils/
+|       |-- retrieval.js             # Smart relevance retrieval
+|       |-- deduplication.js         # Merge/update/create logic
+|       |-- graph-traversal.js       # BFS/DFS traversal
+|       `-- logger.js                # Logging
+|-- data/
+|   `-- x-gun-memory.db              # SQLite database (default fallback)
+|-- config.json                      # All configuration
+`-- package.json
 ```
 
 ## Installation
@@ -299,8 +299,8 @@ Use `agentId: "global"` for shared knowledge:
 
 All agents can read global memories.
 Write controls depend on transport:
-- REST API uses API-key permissions (`global`) via auth middleware.
-- MCP stdio mode has no per-request API-key identity, so enforce global-write policy at process/deployment boundary.
+- REST API uses API-key permissions (`global`) via auth middleware, or `callerAgentId` / `X-Agent-Id` allowlisted in `agents.allowGlobalWrites`.
+- MCP write tools require `callerAgentId` for `agentId: "global"` and validate it against `agents.allowGlobalWrites`.
 
 ### Session & Namespace
 Optional grouping for better organization:
@@ -327,7 +327,7 @@ Optional grouping for better organization:
 #### store_context
 Store any data in the graph.
 
-Parameters: `{agentId, sessionId?, namespace?, type, content, relationships?, metadata?}`  
+Parameters: `{agentId, callerAgentId?, sessionId?, namespace?, type, content, relationships?, metadata?}`  
 Required: `agentId`, `type`, `content`
 
 Returns:
@@ -338,7 +338,7 @@ Returns:
 #### retrieve_context
 Get relevant context using semantic + graph search.
 
-Parameters: `{agentId, query, max_nodes?, traverse_depth?, highAccuracy?}`  
+Parameters: `{agentId, sessionId?, namespace?, query, max_nodes?, traverse_depth?, highAccuracy?}`  
 Required: `agentId`, `query`
 
 Returns: `[{id, type, content, contentType: "full"|"summary", similarity, source}]`
@@ -353,7 +353,7 @@ Returns: `{nodes, edges}`
 #### batch_store_context
 Store multiple memories at once. Much faster than calling store_context repeatedly.
 
-Parameters: `{agentId, sessionId?, namespace?, items: [{type, content, metadata?}]}`  
+Parameters: `{agentId, callerAgentId?, sessionId?, namespace?, items: [{type, content, metadata?}]}`  
 Required: `agentId`, `items`
 
 Returns: "Stored X memories. Node IDs: ..."
@@ -361,7 +361,7 @@ Returns: "Stored X memories. Node IDs: ..."
 #### store_memory
 Store structured memory with automatic feature extraction.
 
-Parameters: `{agentId, sessionId?, namespace?, content, memoryType?, tags?, entities?, summary?, importance?, confidence?, autoExtract?}`  
+Parameters: `{agentId, callerAgentId?, sessionId?, namespace?, content, memoryType?, tags?, entities?, summary?, importance?, confidence?, autoExtract?}`  
 Required: `agentId`, `content`
 
 Returns: Structured memory with extracted features
@@ -371,12 +371,12 @@ Returns: Structured memory with extracted features
 All endpoints require `agentId` in request body/query parameters.
 
 - `POST /store/memory` - Store structured memory with auto-extraction
-  - Body: `{agentId, content, memoryType?, tags?, entities?, summary?, importance?, confidence?, autoExtract?}`
+  - Body: `{agentId, callerAgentId?, content, memoryType?, tags?, entities?, summary?, importance?, confidence?, autoExtract?}`
 - `POST /store` - Store single memory (with dedup)
-  - Body: `{agentId, sessionId?, namespace?, type, content, relationships?, metadata?}`
+  - Body: `{agentId, callerAgentId?, sessionId?, namespace?, type, content, relationships?, metadata?}`
 - `POST /store/batch` - Store multiple memories at once
-  - Body: `{agentId, sessionId?, namespace?, items: [{type, content, metadata?}]}`
-- `GET /retrieve?agentId=X&q=query&max_nodes=5&traverse_depth=2&highAccuracy=false` - Semantic + graph search
+  - Body: `{agentId, callerAgentId?, sessionId?, namespace?, items: [{type, content, metadata?}]}`
+- `GET /retrieve?agentId=X&sessionId=Y&namespace=Z&q=query&max_nodes=5&traverse_depth=2&highAccuracy=false` - Semantic + graph search (optional session/namespace scope)
 - `POST /query` - Filter by type/relationship/time
   - Body: `{agentId, node_type?, relationship?, time_range?}`
 - `GET /graph?node_id=123&depth=2` - Traverse from node ID (within agent scope)
@@ -388,7 +388,16 @@ All endpoints require `agentId` in request body/query parameters.
 {
   "status": "ok",
   "storage": { "type": "sqlite", "status": "ok", "latencyMs": 2 },
-  "embeddings": { "cacheHits": 142, "cacheMisses": 23, "avgLatencyMs": 45 },
+  "embeddings": {
+    "cacheHits": 142,
+    "cacheMisses": 23,
+    "lruCacheSize": 321,
+    "redisEnabled": true,
+    "avgLatencyMs": 45,
+    "avgCachedLatencyMs": 8,
+    "avgUncachedLatencyMs": 220,
+    "batchSize": 32
+  },
   "uptime": 3600,
   "version": "2.0.0"
 }
@@ -397,7 +406,7 @@ All endpoints require `agentId` in request body/query parameters.
 
 ## Switching Storage Backends
 
-### Local Development (SQLite — default)
+### Local Development (SQLite - default)
 No changes needed. Works out of the box.
 
 ### Production (PostgreSQL)

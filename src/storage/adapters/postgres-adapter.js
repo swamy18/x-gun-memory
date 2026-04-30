@@ -361,16 +361,26 @@ class PostgresAdapter extends BaseAdapter {
     await migrationManager.runMigrations();
   }
 
-  async fastTextSearch(query, limit = 50, agentId = 'global') {
+  async fastTextSearch(query, limit = 50, agentId = 'global', scope = {}) {
     try {
-      const sql = `
+      let sql = `
         SELECT id, type, data, embedding, agent_id, session_id, namespace
         FROM nodes
         WHERE agent_id = $1 AND text_search @@ plainto_tsquery('english', $2)
-        ORDER BY ts_rank(text_search, plainto_tsquery('english', $2)) DESC
-        LIMIT $3
       `;
-      const result = await this.pool.query(sql, [agentId, query, limit]);
+      const params = [agentId, query];
+      let p = 3;
+      if (scope.sessionId) {
+        sql += ` AND session_id = $${p++}`;
+        params.push(scope.sessionId);
+      }
+      if (scope.namespace) {
+        sql += ` AND namespace = $${p++}`;
+        params.push(scope.namespace);
+      }
+      sql += ` ORDER BY ts_rank(text_search, plainto_tsquery('english', $2)) DESC LIMIT $${p}`;
+      params.push(limit);
+      const result = await this.pool.query(sql, params);
 
       return result.rows.map(row => ({
         id: row.id,
@@ -412,17 +422,27 @@ class PostgresAdapter extends BaseAdapter {
     await this.pool.query(sql, params);
   }
 
-  async allQuery(queryEmbedding, limit = 10, agentId = 'global') {
+  async allQuery(queryEmbedding, limit = 10, agentId = 'global', scope = {}) {
     // Use pgvector for efficient search
     const embeddingStr = `[${queryEmbedding.join(',')}]`;
-    const sql = `
+    let sql = `
       SELECT id, type, data, 1 - (embedding <=> $1::vector) as similarity
       FROM nodes
       WHERE embedding IS NOT NULL AND agent_id = $2
-      ORDER BY embedding <=> $1::vector
-      LIMIT $3
     `;
-    const result = await this.pool.query(sql, [embeddingStr, agentId, limit]);
+    const params = [embeddingStr, agentId];
+    let p = 3;
+    if (scope.sessionId) {
+      sql += ` AND session_id = $${p++}`;
+      params.push(scope.sessionId);
+    }
+    if (scope.namespace) {
+      sql += ` AND namespace = $${p++}`;
+      params.push(scope.namespace);
+    }
+    sql += ` ORDER BY embedding <=> $1::vector LIMIT $${p}`;
+    params.push(limit);
+    const result = await this.pool.query(sql, params);
     return result.rows.map(row => ({
       id: row.id,
       type: row.type,

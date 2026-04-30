@@ -68,6 +68,10 @@ class Retrieval {
   async retrieve(query, options = {}) {
     const maxNodes = options.maxNodes || this.config.defaultMaxNodes || 5;
     const agentId = options.agentId || 'global';
+    const scope = {
+      sessionId: options.sessionId || null,
+      namespace: options.namespace || null
+    };
 
     const isHighAccuracy = this.shouldUseHighAccuracy(query, options);
 
@@ -75,9 +79,9 @@ class Retrieval {
 
     let results;
     if (isHighAccuracy) {
-      results = await this.highAccuracyRetrieval(query, agentId, options);
+      results = await this.highAccuracyRetrieval(query, agentId, options, scope);
     } else {
-      results = await this.fastRetrieval(query, agentId, options);
+      results = await this.fastRetrieval(query, agentId, options, scope);
     }
 
     const totalTime = Date.now() - startTime;
@@ -87,13 +91,13 @@ class Retrieval {
     return results;
   }
 
-  async fastRetrieval(query, agentId, options = {}) {
+  async fastRetrieval(query, agentId, options = {}, scope = {}) {
     const maxNodes = options.maxNodes || this.config.defaultMaxNodes || 5;
     const fastLimit = this.config.fastLimit || 50;
 
     // STEP 1: Fast keyword/text search
     const fastStart = Date.now();
-    let candidates = await this.graphDB.adapter.fastTextSearch(query, fastLimit, agentId);
+    let candidates = await this.graphDB.adapter.fastTextSearch(query, fastLimit, agentId, scope);
     const fastFilterTime = Date.now() - fastStart;
 
     // If no keyword results, fallback to full vector search
@@ -103,7 +107,7 @@ class Retrieval {
       const queryEmbedding = await this.embeddings.generate(query);
       embeddingTime = Date.now() - embeddingStart;
 
-      const semanticResults = await this.graphDB.allQuery(queryEmbedding, maxNodes * 2, agentId);
+      const semanticResults = await this.graphDB.allQuery(queryEmbedding, maxNodes * 2, agentId, scope);
       candidates = semanticResults.map(result => ({
         ...result,
         data: result.data,
@@ -181,14 +185,14 @@ class Retrieval {
     });
   }
 
-  async highAccuracyRetrieval(query, agentId, options = {}) {
+  async highAccuracyRetrieval(query, agentId, options = {}, scope = {}) {
     const maxNodes = options.maxNodes || this.config.finalLimit || 10;
     const highAccuracyLimit = this.config.highAccuracyLimit || 100;
     const graphDepth = this.config.graphDepth || 2;
 
     // STEP 1: Expanded keyword search
     const fastStart = Date.now();
-    const candidates = await this.graphDB.adapter.fastTextSearch(query, highAccuracyLimit, agentId);
+    const candidates = await this.graphDB.adapter.fastTextSearch(query, highAccuracyLimit, agentId, scope);
     const fastFilterTime = Date.now() - fastStart;
 
     let results = [];
@@ -262,7 +266,7 @@ class Retrieval {
       const queryEmbedding = await this.embeddings.generate(query);
       const embeddingTime = Date.now() - embeddingStart;
 
-      const semanticResults = await this.graphDB.allQuery(queryEmbedding, maxNodes, agentId);
+      const semanticResults = await this.graphDB.allQuery(queryEmbedding, maxNodes, agentId, scope);
 
       console.log(`High accuracy fallback: embedding=${embeddingTime}ms`);
 

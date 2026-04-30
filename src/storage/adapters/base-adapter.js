@@ -131,7 +131,7 @@ class BaseAdapter {
    * @param {number} limit - Maximum results to return
    * @returns {Promise<Array<{id: number, type: string, data: object, similarity: number}>>}
    */
-  async allQuery(queryEmbedding, limit, agentId) {
+  async allQuery(queryEmbedding, limit, agentId, scope = {}) {
     throw new Error('allQuery() must be implemented by subclass');
   }
 
@@ -143,7 +143,7 @@ class BaseAdapter {
    * @param {string} agentId - Agent identifier
    * @returns {Promise<Array>} Candidate nodes
    */
-  async fastTextSearch(query, limit, agentId) {
+  async fastTextSearch(query, limit, agentId, scope = {}) {
     throw new Error('fastTextSearch() must be implemented by subclass');
   }
 

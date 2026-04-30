@@ -26,8 +26,6 @@ class Logger {
     console.log(`[${timestamp}] ${level.toUpperCase()}: ${message}`, Object.keys(meta).length > 0 ? meta : '');
 
     try {
-      const fs = require('fs');
-      const path = require('path');
       const dir = path.dirname(this.logFile);
 
       if (!fs.existsSync(dir)) {
@@ -38,6 +36,7 @@ class Logger {
     } catch (error) {
       console.error('Failed to write to log file:', error);
     }
+  }
 }
 
 module.exports = Logger;

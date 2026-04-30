@@ -39,9 +39,19 @@ class Auth {
     }
 
     const { agentId } = req.method === 'GET' ? req.query : req.body;
+    const callerAgentId = req.headers['x-agent-id'] || req.body?.callerAgentId || req.query?.callerAgentId;
+    const allowGlobalWrites = config.agents?.allowGlobalWrites || [];
 
+    const isWriteMethod = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
     if (agentId === 'global' && !req.auth?.permissions.includes('global')) {
-      return res.status(403).json({ error: 'Global access not permitted' });
+      if (!isWriteMethod) {
+        return res.status(403).json({ error: 'Global access not permitted' });
+      }
+      if (!callerAgentId || !allowGlobalWrites.includes(callerAgentId)) {
+        return res.status(403).json({
+          error: 'Global writes require global permission or allowed caller agent'
+        });
+      }
     }
 
     next();

@@ -95,6 +95,8 @@ class EmbeddingQueue {
 
             // Remove from processing queue (success)
             await this.redis.lrem('embedding_processing', 1, jobData);
+            // Remove dedup key to prevent unbounded growth
+            await this.redis.srem('embedding_jobs', job.key);
 
           } catch (error) {
             console.error(`Embedding job ${job.id} failed:`, error);
@@ -115,6 +117,7 @@ class EmbeddingQueue {
               }), 'EX', 3600);
 
               await this.redis.lrem('embedding_processing', 1, jobData);
+              await this.redis.srem('embedding_jobs', job.key);
             }
           }
 

@@ -22,6 +22,11 @@ class Embeddings {
 
     this.cacheHits = 0;
     this.cacheMisses = 0;
+    this.cachedLatencyTotal = 0;
+    this.uncachedLatencyTotal = 0;
+    this.cachedLatencyCount = 0;
+    this.uncachedLatencyCount = 0;
+    this.batchSize = config.embeddings?.batchSize || 32;
     this.useQueue = useQueue;
     this.queue = useQueue ? new EmbeddingQueue(this, config) : null;
     this.mockMode = process.env.MOCK_EMBEDDINGS === 'true';
@@ -68,6 +73,7 @@ class Embeddings {
    * @returns {Promise<number[]>} Embedding vector
    */
   async generate(text, retryCount = 0) {
+    const startTime = Date.now();
     if (this.mockMode) {
       return this.mockEmbedding(text);
     }
@@ -88,6 +94,8 @@ class Embeddings {
           const embedding = JSON.parse(cached);
           this.lruCache.set(hash, embedding); // Also cache in LRU
           this.cacheHits++;
+          this.cachedLatencyTotal += Date.now() - startTime;
+          this.cachedLatencyCount++;
           return embedding;
         }
       } catch (error) {
@@ -99,6 +107,8 @@ class Embeddings {
     let embedding = this.lruCache.get(hash);
     if (embedding) {
       this.cacheHits++;
+      this.cachedLatencyTotal += Date.now() - startTime;
+      this.cachedLatencyCount++;
       return embedding;
     }
 
@@ -140,6 +150,8 @@ class Embeddings {
 
       return embedding;
     } finally {
+      this.uncachedLatencyTotal += Date.now() - startTime;
+      this.uncachedLatencyCount++;
       // Always release lock
       if (this.redis.isEnabled()) {
         try {
@@ -185,42 +197,54 @@ class Embeddings {
       }
     }
 
-    // Generate embeddings for uncached texts
+    const chunkSize = Math.max(1, this.batchSize);
+
+    // Generate embeddings for uncached texts in configured chunks
     if (uncachedTexts.length > 0) {
       if (this.useQueue && !sync) {
-        // Use queue for async processing
-        return new Promise((resolve, reject) => {
-          this.queue.enqueue(uncachedTexts, (error, embeddings) => {
-            if (error) {
-              reject(error);
-              return;
-            }
+        // Use queue for async processing with chunking
+        const chunkPromises = [];
+        for (let i = 0; i < uncachedTexts.length; i += chunkSize) {
+          const chunkTexts = uncachedTexts.slice(i, i + chunkSize);
+          chunkPromises.push(new Promise((resolve, reject) => {
+            this.queue.enqueue(chunkTexts, (error, embeddings) => {
+              if (error) {
+                reject(error);
+                return;
+              }
+              resolve({ start: i, embeddings });
+            });
+          }));
+        }
 
-            // Process results and update cache
-            for (let i = 0; i < uncachedTexts.length; i++) {
-              const embedding = embeddings[i];
-              const originalIndex = uncachedIndices[i];
-              const hash = this.hashText(uncachedTexts[i]);
+        const chunkResults = await Promise.all(chunkPromises);
+        for (const chunkResult of chunkResults) {
+          for (let j = 0; j < chunkResult.embeddings.length; j++) {
+            const embedding = chunkResult.embeddings[j];
+            const uncachedIndex = chunkResult.start + j;
+            const originalIndex = uncachedIndices[uncachedIndex];
+            const hash = this.hashText(uncachedTexts[uncachedIndex]);
 
-              results[originalIndex] = embedding;
-              this.lruCache.set(hash, embedding);
-            }
-
-            resolve(results);
-          });
-        });
+            results[originalIndex] = embedding;
+            this.lruCache.set(hash, embedding);
+          }
+        }
       } else {
-        // Synchronous processing
-        const outputs = await this.extractor(uncachedTexts, { pooling: 'mean', normalize: true });
+        // Synchronous chunked processing
+        for (let i = 0; i < uncachedTexts.length; i += chunkSize) {
+          const chunkTexts = uncachedTexts.slice(i, i + chunkSize);
+          const outputs = await this.extractor(chunkTexts, { pooling: 'mean', normalize: true });
 
-        // outputs is array of {data: Float32Array}
-        for (let i = 0; i < uncachedTexts.length; i++) {
-          const embedding = Array.from(outputs[i].data);
-          const originalIndex = uncachedIndices[i];
-          const hash = this.hashText(uncachedTexts[i]);
+          // outputs is array of {data: Float32Array}
+          for (let j = 0; j < chunkTexts.length; j++) {
+            const embedding = Array.from(outputs[j].data);
+            const uncachedIndex = i + j;
+            const originalIndex = uncachedIndices[uncachedIndex];
+            const hash = this.hashText(uncachedTexts[uncachedIndex]);
 
-          results[originalIndex] = embedding;
-          this.lruCache.set(hash, embedding);
+            results[originalIndex] = embedding;
+            this.lruCache.set(hash, embedding);
+          }
         }
       }
     }
@@ -238,7 +262,10 @@ class Embeddings {
       cacheMisses: this.cacheMisses,
       lruCacheSize: this.lruCache.size,
       redisEnabled: this.redis.isEnabled(),
-      avgLatencyMs: 0 // Could track this with timing
+      avgLatencyMs: (this.cachedLatencyTotal + this.uncachedLatencyTotal) / Math.max(1, this.cachedLatencyCount + this.uncachedLatencyCount),
+      avgCachedLatencyMs: this.cachedLatencyTotal / Math.max(1, this.cachedLatencyCount),
+      avgUncachedLatencyMs: this.uncachedLatencyTotal / Math.max(1, this.uncachedLatencyCount),
+      batchSize: this.batchSize
     };
   }
 

@@ -134,19 +134,28 @@ class SQLiteAdapter extends BaseAdapter {
     await migrationManager.runMigrations();
   }
 
-  async fastTextSearch(query, limit = 50, agentId = 'global') {
+  async fastTextSearch(query, limit = 50, agentId = 'global', scope = {}) {
     try {
-      const stmt = this.db.prepare(`
+      let sql = `
         SELECT n.id, n.type, n.data, n.embeddings, n.agent_id, n.session_id, n.namespace,
                fts.rank
         FROM nodes_fts fts
         JOIN nodes n ON n.id = fts.rowid
         WHERE fts.agent_id = ? AND fts.content MATCH ?
-        ORDER BY fts.rank DESC
-        LIMIT ?
-      `);
-
-      const rows = stmt.all(agentId, query, limit);
+      `;
+      const params = [agentId, query];
+      if (scope.sessionId) {
+        sql += ' AND n.session_id = ?';
+        params.push(scope.sessionId);
+      }
+      if (scope.namespace) {
+        sql += ' AND n.namespace = ?';
+        params.push(scope.namespace);
+      }
+      sql += ' ORDER BY fts.rank DESC LIMIT ?';
+      params.push(limit);
+      const stmt = this.db.prepare(sql);
+      const rows = stmt.all(...params);
 
       return rows.map(row => ({
         id: row.id,
@@ -484,19 +493,29 @@ class SQLiteAdapter extends BaseAdapter {
     });
   }
 
-  async allQuery(queryEmbedding, limit = 10, agentId = 'global') {
+  async allQuery(queryEmbedding, limit = 10, agentId = 'global', scope = {}) {
     if (this.vecAvailable) {
       // Use sqlite-vec for efficient search
       const queryBuffer = Buffer.from(new Float32Array(queryEmbedding).buffer);
-      const stmt = this.db.prepare(`
+      let sql = `
         SELECT vn.id, n.type, n.data, distance
         FROM vec_nodes vn
         JOIN nodes n ON n.id = vn.id
         WHERE vn.embedding MATCH ? AND n.agent_id = ?
-        ORDER BY distance
-        LIMIT ?
-      `);
-      const rows = stmt.all(queryBuffer, agentId, limit);
+      `;
+      const params = [queryBuffer, agentId];
+      if (scope.sessionId) {
+        sql += ' AND n.session_id = ?';
+        params.push(scope.sessionId);
+      }
+      if (scope.namespace) {
+        sql += ' AND n.namespace = ?';
+        params.push(scope.namespace);
+      }
+      sql += ' ORDER BY distance LIMIT ?';
+      params.push(limit);
+      const stmt = this.db.prepare(sql);
+      const rows = stmt.all(...params);
 
       return rows.map(row => ({
         id: row.id,
@@ -506,7 +525,24 @@ class SQLiteAdapter extends BaseAdapter {
       }));
     } else {
       // Fallback to JS similarity
-      const allNodes = await this.getAllNodesWithEmbeddingsByAgent(agentId);
+      const queryParts = ['SELECT id, type, data, embeddings, session_id, namespace FROM nodes WHERE embeddings IS NOT NULL AND agent_id = ?'];
+      const params = [agentId];
+      if (scope.sessionId) {
+        queryParts.push('AND session_id = ?');
+        params.push(scope.sessionId);
+      }
+      if (scope.namespace) {
+        queryParts.push('AND namespace = ?');
+        params.push(scope.namespace);
+      }
+      const stmt = this.db.prepare(queryParts.join(' '));
+      const rows = stmt.all(...params);
+      const allNodes = rows.map(row => ({
+        id: row.id,
+        type: row.type,
+        data: JSON.parse(row.data),
+        embedding: JSON.parse(row.embeddings)
+      }));
       const results = allNodes
         .map(node => ({
           ...node,

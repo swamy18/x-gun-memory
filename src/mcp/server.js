@@ -47,6 +47,7 @@ class UniversalGraphServer {
               type: 'object',
               properties: {
                 agentId: { type: 'string', default: 'global' },
+                callerAgentId: { type: 'string' },
                 sessionId: { type: 'string' },
                 namespace: { type: 'string' },
                 type: {
@@ -70,6 +71,8 @@ class UniversalGraphServer {
               type: 'object',
               properties: {
                 agentId: { type: 'string', default: 'global' },
+                sessionId: { type: 'string' },
+                namespace: { type: 'string' },
                 query: { type: 'string' },
                 max_nodes: { type: 'number', default: 5 },
                 traverse_depth: { type: 'number', default: 2 },
@@ -104,6 +107,7 @@ class UniversalGraphServer {
               type: 'object',
               properties: {
                 agentId: { type: 'string', default: 'global' },
+                callerAgentId: { type: 'string' },
                 sessionId: { type: 'string' },
                 namespace: { type: 'string' },
                 items: {
@@ -129,6 +133,7 @@ class UniversalGraphServer {
               type: 'object',
               properties: {
                 agentId: { type: 'string', default: 'global' },
+                callerAgentId: { type: 'string' },
                 sessionId: { type: 'string' },
                 namespace: { type: 'string' },
                 content: { type: 'string' },
@@ -211,15 +216,13 @@ class UniversalGraphServer {
   }
 
   async handleStoreContext(args) {
-    const { agentId, sessionId, namespace, type, content, relationships = [], metadata = {} } = args;
+    const { agentId, callerAgentId, sessionId, namespace, type, content, relationships = [], metadata = {} } = args;
 
     if (!agentId || typeof agentId !== 'string') {
       throw new Error('agentId is required and must be a string');
     }
 
-    // MCP transports don't currently provide per-request agent identity in this handler,
-    // so we cannot reliably enforce agent-based global-write ACLs here.
-    // HTTP mode still enforces API key auth at middleware level.
+    this.validateGlobalWrite(agentId, callerAgentId);
 
     if (!type || typeof type !== 'string' || !content || typeof content !== 'string') {
       throw new Error('type and content are required strings');
@@ -271,7 +274,7 @@ class UniversalGraphServer {
   }
 
   async handleRetrieveContext(args) {
-    const { agentId, query, max_nodes = 5, traverse_depth = 2, highAccuracy = false } = args;
+    const { agentId, sessionId, namespace, query, max_nodes = 5, traverse_depth = 2, highAccuracy = false } = args;
 
     if (!agentId || typeof agentId !== 'string') {
       throw new Error('agentId is required and must be a string');
@@ -296,6 +299,8 @@ class UniversalGraphServer {
       maxNodes: maxNodes,
       traverseDepth: traverseDepth,
       agentId: agentId,
+      sessionId,
+      namespace,
       highAccuracy: highAccuracy
     });
 
@@ -337,7 +342,7 @@ class UniversalGraphServer {
   }
 
   async handleBatchStoreContext(args) {
-    const { agentId, sessionId, namespace, items } = args;
+    const { agentId, callerAgentId, sessionId, namespace, items } = args;
 
     if (!agentId || typeof agentId !== 'string') {
       throw new Error('agentId is required and must be a string');
@@ -346,6 +351,8 @@ class UniversalGraphServer {
     if (!Array.isArray(items)) {
       throw new Error('items must be an array');
     }
+
+    this.validateGlobalWrite(agentId, callerAgentId);
 
     for (const item of items) {
       if (!item.type || typeof item.type !== 'string' || !item.content || typeof item.content !== 'string') {
@@ -388,6 +395,7 @@ class UniversalGraphServer {
   async handleStoreMemory(args) {
     const {
       agentId,
+      callerAgentId,
       sessionId,
       namespace,
       content,
@@ -407,6 +415,8 @@ class UniversalGraphServer {
     if (!content || typeof content !== 'string') {
       throw new Error('content is required and must be a string');
     }
+
+    this.validateGlobalWrite(agentId, callerAgentId);
 
     // Extract features if not provided and autoExtract is enabled
     let features = {};
@@ -443,6 +453,14 @@ class UniversalGraphServer {
 
   async close() {
     await this.graphDB.close();
+  }
+
+  validateGlobalWrite(agentId, callerAgentId) {
+    if (agentId !== 'global') return;
+    const allowGlobalWrites = config.agents?.allowGlobalWrites || [];
+    if (!callerAgentId || !allowGlobalWrites.includes(callerAgentId)) {
+      throw new Error('Global writes require callerAgentId in config.agents.allowGlobalWrites');
+    }
   }
 }
 
